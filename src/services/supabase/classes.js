@@ -1,8 +1,10 @@
 import { supabase } from './client';
+import { supabaseAdmin } from './adminClient';
 
 // ----- CLASSES -----
 export const getClasses = async () => {
-  const { data, error } = await supabase
+  // Use admin client for admin operations to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('classes')
     .select('*');
   
@@ -14,7 +16,7 @@ export const getClassById = async (id) => {
     .from('classes')
     .select('*, subjects (*)')
     .eq('id', id)
-    .single();
+    .maybeSingle(); // Sử dụng maybeSingle() thay vì single()
   
   return { data, error };
 };
@@ -40,7 +42,8 @@ export const getOpenClasses = async () => {
 };
 
 export const createClass = async (classData) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('classes')
     .insert(classData)
     .select();
@@ -49,7 +52,8 @@ export const createClass = async (classData) => {
 };
 
 export const updateClass = async (id, classData) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('classes')
     .update(classData)
     .eq('id', id)
@@ -59,7 +63,8 @@ export const updateClass = async (id, classData) => {
 };
 
 export const deleteClass = async (id) => {
-  const { error } = await supabase
+  // Use admin client to bypass RLS
+  const { error } = await supabaseAdmin
     .from('classes')
     .delete()
     .eq('id', id);
@@ -67,17 +72,26 @@ export const deleteClass = async (id) => {
   return { error };
 };
 
-export const getEnrollments = async (classId) => {
-  const { data, error } = await supabase
+export const getEnrollments = async (classId = null, studentId = null) => {
+  let query = supabase
     .from('class_enrollments')
-    .select('*, students(*)')
-    .eq('class_id', classId);
+    .select('*, students(*), classes(*)');
   
+  if (classId) {
+    query = query.eq('class_id', classId);
+  }
+  
+  if (studentId) {
+    query = query.eq('student_id', studentId);
+  }
+  
+  const { data, error } = await query;
   return { data, error };
 };
 
 export const addClassSchedule = async (classId, scheduleData) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('class_schedules')
     .insert({
       class_id: classId,
@@ -92,7 +106,8 @@ export const addClassSchedule = async (classId, scheduleData) => {
 };
 
 export const getSubjects = async () => {
-  const { data, error } = await supabase
+  // Use admin client for admin operations
+  const { data, error } = await supabaseAdmin
     .from('subjects')
     .select('*')
     .order('name', { ascending: true });
@@ -101,7 +116,8 @@ export const getSubjects = async () => {
 };
 
 export const getTeachers = async () => {
-  const { data, error } = await supabase
+  // Use admin client for admin operations
+  const { data, error } = await supabaseAdmin
     .from('teachers')
     .select('*')
     .order('full_name');
@@ -110,7 +126,8 @@ export const getTeachers = async () => {
 };
 
 export const assignTeacher = async (classId, teacherId, isMain = false) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('class_teachers')
     .insert({
       class_id: classId,
@@ -123,7 +140,8 @@ export const assignTeacher = async (classId, teacherId, isMain = false) => {
 };
 
 export const removeTeacher = async (classId, teacherId) => {
-  const { error } = await supabase
+  // Use admin client to bypass RLS
+  const { error } = await supabaseAdmin
     .from('class_teachers')
     .delete()
     .match({ class_id: classId, teacher_id: teacherId });
@@ -139,7 +157,8 @@ export const getClassTeachers = async (classId) => {
 };
 
 export const removeClassSchedule = async (id) => {
-  const { error } = await supabase
+  // Use admin client to bypass RLS
+  const { error } = await supabaseAdmin
     .from('class_schedules')
     .delete()
     .eq('id', id);

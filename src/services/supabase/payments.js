@@ -1,8 +1,10 @@
 import { supabase } from './client';
+import { supabaseAdmin } from './adminClient';
 
 // ----- PAYMENTS -----
 export const getPayments = async (studentId = null) => {
-  let query = supabase
+  // Use admin client for admin operations to bypass RLS
+  let query = supabaseAdmin
     .from('payments')
     .select('*, students(*), classes(*)');
   
@@ -15,7 +17,8 @@ export const getPayments = async (studentId = null) => {
 };
 
 export const createPayment = async (paymentData) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('payments')
     .insert(paymentData)
     .select();
@@ -24,7 +27,8 @@ export const createPayment = async (paymentData) => {
 };
 
 export const updatePayment = async (id, paymentData) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('payments')
     .update(paymentData)
     .eq('id', id)

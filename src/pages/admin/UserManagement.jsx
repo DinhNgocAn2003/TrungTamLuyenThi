@@ -28,8 +28,7 @@ import {
   InputAdornment,
   Chip,
   Avatar,
-  Switch,
-  FormControlLabel
+  Switch
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -40,7 +39,9 @@ import {
   Lock as LockIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
-  ContentCopy as ContentCopyIcon
+  ContentCopy as ContentCopyIcon,
+  Email as EmailIcon,
+  Phone as PhoneIcon
 } from '@mui/icons-material';
 
 import { useLoading } from '../../contexts/LoadingContext';
@@ -51,7 +52,7 @@ import {
   updateUserProfile,
   deleteUser,
   resetUserPassword
-} from '../../services/supabase/database';
+} from '../../services/supabase/users';
 import PageHeader from '../../components/common/PageHeader';
 
 function UserManagement() {
@@ -69,9 +70,14 @@ function UserManagement() {
   
   const [formData, setFormData] = useState({
     full_name: '',
-    email: '',
+    phone: '',
     password: '',
-    role: 'student'
+    role: 'student',
+    // Student specific fields
+    date_of_birth: '',
+    parent_name: '',
+    parent_phone: '',
+    parent_zalo: ''
   });
   
   const [newPassword, setNewPassword] = useState('');
@@ -113,17 +119,27 @@ function UserManagement() {
     if (user) {
       setFormData({
         full_name: user.full_name,
-        email: user.email,
+        phone: user.phone || '',
         password: '',
-        role: user.role
+        role: user.role,
+        // Student fields - reset for edit mode
+        date_of_birth: '',
+        parent_name: '',
+        parent_phone: '',
+        parent_zalo: ''
       });
       setSelectedUser(user);
     } else {
       setFormData({
         full_name: '',
-        email: '',
-        password: generatePassword(),
-        role: 'student'
+        phone: '',
+        password: '',
+        role: 'student',
+        // Student specific fields
+        date_of_birth: '',
+        parent_name: '',
+        parent_phone: '',
+        parent_zalo: ''
       });
       setSelectedUser(null);
     }
@@ -137,9 +153,13 @@ function UserManagement() {
   
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Trim whitespace for phone field
+    const processedValue = name === 'phone' ? value.trim() : value;
+    
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: processedValue
     }));
   };
   
@@ -158,8 +178,25 @@ function UserManagement() {
   };
   
   const handleSubmit = async () => {
-    if (!formData.full_name.trim() || !formData.email.trim()) {
-      showNotification('Vui lòng nhập đầy đủ thông tin bắt buộc', 'error');
+    console.log('Form data:', formData); // Debug log
+    
+    if (!formData.full_name.trim()) {
+      showNotification('Vui lòng nhập họ và tên', 'error');
+      return;
+    }
+    
+    // Check phone number is provided
+    const phoneValue = formData.phone ? formData.phone.trim() : '';
+    // console.log('Phone value:', phoneValue, 'Length:', phoneValue.length); // Debug log
+    
+    if (!phoneValue) {
+      showNotification('Vui lòng nhập số điện thoại', 'error');
+      return;
+    }
+    
+    // Check password for new users
+    if (!selectedUser && !formData.password.trim()) {
+      showNotification('Vui lòng nhập mật khẩu', 'error');
       return;
     }
     
@@ -168,21 +205,29 @@ function UserManagement() {
       let result;
       
       if (selectedUser) {
-        // Cập nhật tài khoản
-        result = await updateUserProfile(selectedUser.id, {
+        // Cập nhật tài khoản - sử dụng user_id thay vì id
+        result = await updateUserProfile(selectedUser.user_id, {
           full_name: formData.full_name,
-          role: formData.role
+          role: formData.role,
+          phone: phoneValue // Sử dụng phoneValue đã được trim
         });
       } else {
         // Tạo tài khoản mới
-        result = await createUser({
-          email: formData.email,
-          password: formData.password,
-          user_metadata: {
+        const studentInfo = formData.role === 'student' ? {
+          date_of_birth: formData.date_of_birth || null,
+          parent_name: formData.parent_name || null,
+          parent_phone: formData.parent_phone || null,
+          parent_zalo: formData.parent_zalo || null
+        } : undefined;
+        result = await createUser(
+          phoneValue, // Sử dụng phoneValue đã được trim thay vì formData.phone
+          formData.password,
+          {
             full_name: formData.full_name,
             role: formData.role
-          }
-        });
+          },
+          studentInfo
+        );
       }
       
       if (result.error) throw result.error;
@@ -194,7 +239,7 @@ function UserManagement() {
       
       if (!selectedUser) {
         showNotification(
-          `Thông tin đăng nhập: ${formData.email} / ${formData.password}`,
+          `Thông tin đăng nhập: ${phoneValue} / ${formData.password}`,
           'info'
         );
       }
@@ -214,7 +259,7 @@ function UserManagement() {
     
     setLoading(true);
     try {
-      const { error } = await deleteUser(selectedUser.id);
+      const { error } = await deleteUser(selectedUser.user_id); // Sử dụng user_id
       if (error) throw error;
       
       showNotification('Xóa tài khoản thành công', 'success');
@@ -234,7 +279,7 @@ function UserManagement() {
     
     setLoading(true);
     try {
-      const { error } = await resetUserPassword(selectedUser.id, newPassword);
+      const { error } = await resetUserPassword(selectedUser.user_id, newPassword); // Sử dụng user_id
       if (error) throw error;
       
       showNotification('Đặt lại mật khẩu thành công', 'success');
@@ -357,8 +402,7 @@ function UserManagement() {
               <TableRow>
                 <TableCell>Tài khoản</TableCell>
                 <TableCell>Vai trò</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Đăng nhập đầu</TableCell>
+                <TableCell>Thông tin liên hệ</TableCell>
                 <TableCell>Ngày tạo</TableCell>
                 <TableCell align="center">Thao tác</TableCell>
               </TableRow>
@@ -366,7 +410,7 @@ function UserManagement() {
             <TableBody>
               {filteredUsers.length > 0 ? (
                 filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
+                  <TableRow key={user.user_id || user.id}>
                     <TableCell>
                       <Box display="flex" alignItems="center">
                         <Avatar sx={{ mr: 2, bgcolor: getRoleColor(user.role) + '.light' }}>
@@ -375,7 +419,7 @@ function UserManagement() {
                         <Box>
                           <Typography variant="body1">{user.full_name}</Typography>
                           <Typography variant="body2" color="text.secondary">
-                            ID: {user.id.slice(0, 8)}...
+                            ID: {user.user_id?.slice(0, 8)}...
                           </Typography>
                         </Box>
                       </Box>
@@ -388,14 +432,24 @@ function UserManagement() {
                         variant="outlined"
                       />
                     </TableCell>
-                    <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <Chip
-                        label={user.first_login ? 'Chưa đăng nhập' : 'Đã đăng nhập'}
-                        color={user.first_login ? 'warning' : 'success'}
-                        size="small"
-                        variant="outlined"
-                      />
+                      <Box>
+                        {user.email && !user.email.endsWith('@phone.local') && (
+                          <Box display="flex" alignItems="center" mb={0.5}>
+                            <EmailIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
+                            <Typography variant="body2">{user.email}</Typography>
+                          </Box>
+                        )}
+                        {user.phone && (
+                          <Box display="flex" alignItems="center">
+                            <PhoneIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
+                            <Typography variant="body2">{user.phone}</Typography>
+                          </Box>
+                        )}
+                        {!user.email && !user.phone && (
+                          <Typography variant="body2" color="text.secondary">Chưa có</Typography>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       {new Date(user.created_at).toLocaleDateString('vi-VN')}
@@ -427,7 +481,7 @@ function UserManagement() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={5} align="center">
                     <Typography variant="body2" color="text.secondary" py={2}>
                       {searchTerm ? 'Không tìm thấy tài khoản nào' : 'Chưa có tài khoản nào.'}
                     </Typography>
@@ -459,17 +513,25 @@ function UserManagement() {
               />
             </Grid>
             
+            {/* Phone field - required for all users */}
             <Grid item xs={12}>
               <TextField
-                name="email"
-                label="Email"
+                name="phone"
+                label="Số điện thoại"
                 fullWidth
-                type="email"
-                value={formData.email}
+                type="tel"
+                value={formData.phone}
                 onChange={handleInputChange}
                 margin="normal"
                 required
                 disabled={!!selectedUser}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PhoneIcon />
+                    </InputAdornment>
+                  ),
+                }}
               />
             </Grid>
             
@@ -515,6 +577,61 @@ function UserManagement() {
                 </Select>
               </FormControl>
             </Grid>
+            
+            {/* Student specific fields */}
+            {formData.role === 'student' && !selectedUser && (
+              <>
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    margin="normal"
+                    name="date_of_birth"
+                    label="Ngày sinh"
+                    type="date"
+                    value={formData.date_of_birth}
+                    onChange={handleInputChange}
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    margin="normal"
+                    name="parent_name"
+                    label="Tên phụ huynh"
+                    value={formData.parent_name}
+                    onChange={handleInputChange}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    margin="normal"
+                    name="parent_phone"
+                    label="Số điện thoại phụ huynh"
+                    value={formData.parent_phone}
+                    onChange={handleInputChange}
+                    placeholder="0xxxxxxxxx"
+                  />
+                </Grid>
+                
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    margin="normal"
+                    name="parent_zalo"
+                    label="Zalo phụ huynh"
+                    value={formData.parent_zalo}
+                    onChange={handleInputChange}
+                    placeholder="0xxxxxxxxx"
+                  />
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>

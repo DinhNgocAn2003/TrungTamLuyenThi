@@ -477,16 +477,16 @@ function StudentManagement() {
             continue;
           }
           
-          // Chuyển đổi định dạng ngày tháng nếu có
+          // Chuyển đổi định dạng ngày tháng nếu có - ƯU TIÊN FORMAT DD-MM-YYYY
           if (student.date_of_birth) {
             try {
               if (typeof student.date_of_birth === 'string') {
-                // Nếu là chuỗi, thử phân tích cú pháp dựa trên các định dạng phổ biến
-                const formats = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD', 'YYYY/MM/DD'];
+                // Nếu là chuỗi, thử phân tích cú pháp - ƯU TIÊN DD-MM-YYYY
+                const formats = ['DD-MM-YYYY', 'DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD', 'YYYY/MM/DD'];
                 let validDate = null;
                 
                 for (const format of formats) {
-                  const date = dayjs(student.date_of_birth, format);
+                  const date = dayjs(student.date_of_birth, format, true); // strict parsing
                   if (date.isValid()) {
                     validDate = date;
                     break;
@@ -494,10 +494,10 @@ function StudentManagement() {
                 }
                 
                 if (validDate) {
-                  student.date_of_birth = validDate.format('YYYY-MM-DD');
+                  student.date_of_birth = validDate.format('YYYY-MM-DD'); // Lưu vào DB theo format ISO
                 } else {
                   student.date_of_birth = null;
-                  errors.push(`Dòng ${i + 1}: Ngày sinh không hợp lệ`);
+                  errors.push(`Dòng ${i + 1}: Ngày sinh không hợp lệ (định dạng cần: DD-MM-YYYY)`);
                 }
               } else if (typeof student.date_of_birth === 'number') {
                 // Nếu là số, có thể là serial date của Excel
@@ -587,7 +587,7 @@ function StudentManagement() {
       // Tạo một mảng dữ liệu với header và một dòng mẫu
       const data = [
         headers,
-        ['Nguyễn Văn A', '01/01/2010', 'Nam', 'Hà Nội', '0123456789', 'email@example.com', 'Nguyễn Văn B', '0987654321', '0987654321', 'THPT Chu Văn An', '10A1', 'Ghi chú mẫu']
+        ['Nguyễn Văn A', '01-01-2010', 'Nam', 'Hà Nội', '0123456789', 'email@example.com', 'Nguyễn Văn B', '0987654321', '0987654321', 'THPT Chu Văn An', '10A1', 'Ghi chú mẫu']
       ];
       
       // Tạo worksheet từ dữ liệu
@@ -623,7 +623,7 @@ function StudentManagement() {
       students.forEach(student => {
         const row = [
           student.full_name,
-          student.date_of_birth || '',
+          student.date_of_birth ? dayjs(student.date_of_birth).format('DD-MM-YYYY') : '',
           student.gender || '',
           student.address || '',
           student.phone || '',
@@ -840,10 +840,10 @@ function StudentManagement() {
               
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                 <Box>
-                  {selectedStudent.qr_code && (
+                  {selectedStudent.id && (
                     <Chip 
                       icon={<QrCodeIcon />} 
-                      label="Có mã QR" 
+                      label={`Mã QR: ${selectedStudent.id}`} 
                       color="primary" 
                       variant="outlined" 
                       sx={{ mr: 1 }}
@@ -885,7 +885,7 @@ function StudentManagement() {
                   <Grid item xs={12} sm={6}>
                     <Typography variant="subtitle1" gutterBottom>Ngày sinh</Typography>
                     <Typography variant="body1" paragraph>
-                      {selectedStudent.date_of_birth ? dayjs(selectedStudent.date_of_birth).format('DD/MM/YYYY') : 'Chưa cập nhật'}
+                      {selectedStudent.date_of_birth ? dayjs(selectedStudent.date_of_birth).format('DD-MM-YYYY') : 'Chưa cập nhật'}
                     </Typography>
                     
                     <Typography variant="subtitle1" gutterBottom>Giới tính</Typography>
@@ -971,7 +971,7 @@ function StudentManagement() {
                               <TableCell>{enrollment.classes?.name || 'N/A'}</TableCell>
                               <TableCell>{enrollment.classes?.subject || 'N/A'}</TableCell>
                               <TableCell>
-                                {dayjs(enrollment.enrolled_at).format('DD/MM/YYYY')}
+                                {dayjs(enrollment.enrolled_at).format('DD-MM-YYYY')}
                               </TableCell>
                               <TableCell>
                                 <Chip 
@@ -1018,7 +1018,7 @@ function StudentManagement() {
                               <TableCell>{payment.classes?.name || 'N/A'}</TableCell>
                               <TableCell>{payment.amount.toLocaleString('vi-VN')} VNĐ</TableCell>
                               <TableCell>
-                                {dayjs(payment.payment_date).format('DD/MM/YYYY')}
+                                {dayjs(payment.payment_date).format('DD-MM-YYYY')}
                               </TableCell>
                               <TableCell>
                                 {payment.payment_method === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'}
@@ -1072,7 +1072,7 @@ function StudentManagement() {
                             <TableRow key={record.id}>
                               <TableCell>{record.classes?.name || 'N/A'}</TableCell>
                               <TableCell>
-                                {dayjs(record.date).format('DD/MM/YYYY')}
+                                {dayjs(record.date).format('DD-MM-YYYY')}
                               </TableCell>
                               <TableCell>
                                 <Chip 
@@ -1286,16 +1286,19 @@ function StudentManagement() {
         <DialogTitle>Mã QR của học sinh</DialogTitle>
         <DialogContent>
           <Box display="flex" flexDirection="column" alignItems="center" my={2}>
-            {selectedStudent?.qr_code ? (
+            {selectedStudent?.id ? (
               <>
                 <QRCode 
-                  value={selectedStudent.qr_code} 
+                  value={selectedStudent.id} 
                   size={200}
                   level="H"
                   includeMargin
                 />
                 <Typography variant="subtitle1" mt={2}>
                   {selectedStudent.full_name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" mt={1}>
+                  Mã học sinh: {selectedStudent.id}
                 </Typography>
                 <Button
                   variant="outlined"
@@ -1305,7 +1308,7 @@ function StudentManagement() {
                     const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
                     let downloadLink = document.createElement("a");
                     downloadLink.href = pngUrl;
-                    downloadLink.download = `QR_${selectedStudent.full_name.replace(/\s+/g, '_')}.png`;
+                    downloadLink.download = `QR_${selectedStudent.id}_${selectedStudent.full_name.replace(/\s+/g, '_')}.png`;
                     document.body.appendChild(downloadLink);
                     downloadLink.click();
                     document.body.removeChild(downloadLink);
@@ -1317,7 +1320,7 @@ function StudentManagement() {
               </>
             ) : (
               <Typography variant="body1" color="error">
-                Học sinh chưa có mã QR. Vui lòng cập nhật thông tin học sinh.
+                Học sinh chưa có mã học sinh. Vui lòng cập nhật thông tin học sinh.
               </Typography>
             )}
           </Box>

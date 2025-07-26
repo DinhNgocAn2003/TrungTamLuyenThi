@@ -1,210 +1,184 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../services/supabase/client';
-import { getUserProfileById, checkFirstLogin, updateFirstLogin } from '../services/supabase/auth';
+import { getUserProfileById, signInWithEmailOrPhone } from '../services/supabase/auth';
 
 const AuthContext = createContext({
   user: null,
   userProfile: null,
-  firstLogin: false,
   loading: true,
-  login: async () => ({ success: false, error: null }),
-  logout: async () => ({ success: false, error: null }),
-  resetPassword: async () => ({ success: false, error: null }),
-  updatePassword: async () => ({ success: false, error: null }),
-  updateFirstLoginStatus: async () => ({ success: false, error: null }),
+  signIn: () => {},
+  signOut: () => {},
+  signUp: () => {},
+  refreshUserProfile: () => {}
 });
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
 
 export const AuthProvider = ({ children }) => {
   const [authState, setAuthState] = useState({
     user: null,
     userProfile: null,
-    firstLogin: false,
-    loading: true,
+    loading: true
   });
 
-  // Hàm chung để cập nhật state
-  const updateAuthState = (updates) => {
-    setAuthState(prev => ({ ...prev, ...updates }));
-  };
-
-  // Xử lý session khi auth state thay đổi
-  const handleAuthChange = useCallback(async (event, session) => {
+  const refreshUserProfile = useCallback(async (userId) => {
+    if (!userId) return null;
+    
     try {
-      if (session?.user) {
-        const [{ data: profile }, { data: firstLoginData }] = await Promise.all([
-          getUserProfileById(session.user.id),
-          checkFirstLogin(session.user.id)
-        ]);
-
-        updateAuthState({
-          user: session.user,
-          userProfile: profile,
-          firstLogin: firstLoginData?.first_login || false,
-          loading: false
-        });
-      } else {
-        updateAuthState({
-          user: null,
-          userProfile: null,
-          firstLogin: false,
-          loading: false
-        });
-      }
+      const { data: profile, error } = await getUserProfileById(userId);
+      if (error) throw error;
+      
+      setAuthState(prev => ({
+        ...prev,
+        userProfile: profile
+      }));
+      return profile;
     } catch (error) {
-      console.error('Auth state change error:', error);
-      updateAuthState({ loading: false });
+      console.error('Error refreshing user profile:', error);
+      return null;
     }
   }, []);
 
-  // Theo dõi thay đổi auth state
-useEffect(() => {
-  // console.log("AuthProvider mounted - Setting up auth listener");
-  
-  // Lấy session ngay lập tức khi component mount
-  supabase.auth.getSession()
-    .then(({ data: { session }, error }) => {
-      // console.log("Initial session check:", { session, error });
-      if (error) {
-        console.error("Error getting initial session:", error);
-        return;
+  useEffect(() => {
+    let timeoutId;
+    
+    // Lấy session hiện tại
+    const getSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        // Ngay lập tức set user nếu có session, load profile sau
+        if (session?.user) {
+          setAuthState({
+            user: session.user,
+            userProfile: null, // Load sau
+            loading: false
+          });
+          
+          // Load profile trong background
+          refreshUserProfile(session.user.id);
+        } else {
+          setAuthState({
+            user: null,
+            userProfile: null,
+            loading: false
+          });
+        }
+      } catch (error) {
+        console.error('Error getting session:', error);
+        setAuthState(prev => ({ ...prev, loading: false }));
       }
-      handleAuthChange('INITIAL_SESSION', session);
-    })
-    .catch((err) => {
-      console.error("Failed to get initial session:", err);
-    });
-
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(
-    (event, session) => {
-      // console.log(`Auth state changed: ${event}`, session);
-      handleAuthChange(event, session);
-    }
-  );
-
-  return () => {
-    // console.log("AuthProvider unmounted - Cleaning up auth listener");
-    subscription?.unsubscribe();
-  };
-}, [handleAuthChange]);
-
-const login = async (email, password) => {
-  updateAuthState({ loading: true });
-  
-  try {
-    
-    const result = await supabase.auth.signInWithPassword({ 
-      email, 
-      password 
-    });
-     
-    const { data, error } = result;
-    
-    if (error) {
-      console.error("Login error details:", {
-        message: error.message,
-        status: error.status,
-        name: error.name
-      });
-      throw error;
-    }
-    
-    if (!data?.user) {
-      throw new Error("No user data returned");
-    }
-    
-    console.log("Login successful, user:", data.user);
-    return { success: true, user: data.user };
-    
-  } catch (error) {
-    console.error("Full login error:", {
-      message: error.message,
-      stack: error.stack,
-      originalError: error
-    });
-    
-    // Xử lý các loại lỗi cụ thể
-    let errorMessage = error.message;
-    if (error.status === 400) {
-      errorMessage = "Email hoặc mật khẩu không đúng";
-    }
-    
-    return { 
-      success: false, 
-      error: errorMessage,
-      details: error 
     };
-  } finally {
-    console.log("Login attempt completed");
-    updateAuthState({ loading: false });
-  }
-};
 
-  const logout = async () => {
-    updateAuthState({ loading: true });
-    
+    // Timeout ngắn hơn (1 giây)
+    timeoutId = setTimeout(() => {
+      setAuthState(prev => ({ ...prev, loading: false }));
+    }, 1000);
+
+    getSession();
+
+    // Lắng nghe thay đổi auth state
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setAuthState({
+          user: session.user,
+          userProfile: null,
+          loading: false
+        });
+        // Load profile sau
+        refreshUserProfile(session.user.id);
+      } else {
+        setAuthState({
+          user: null,
+          userProfile: null,
+          loading: false
+        });
+      }
+    });
+
+    return () => {
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
+  }, [refreshUserProfile]);
+
+  const signIn = async (emailOrPhone, password) => {
+    try {
+      const { data, error } = await signInWithEmailOrPhone(emailOrPhone, password);
+      
+      if (error) {
+        return { data: null, error };
+      }
+      
+      // Không cần set loading vì onAuthStateChange sẽ handle
+      return { data, error: null };
+    } catch (error) {
+      console.error('Sign in error:', error);
+      return { data: null, error };
+    }
+  };
+
+  const signUp = async (email, password, userData) => {
+    try {
+      setAuthState(prev => ({ ...prev, loading: true }));
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: userData
+        }
+      });
+      
+      if (error) throw error;
+      
+      return { data, error: null };
+    } catch (error) {
+      console.error('Sign up error:', error);
+      setAuthState(prev => ({ ...prev, loading: false }));
+      return { data: null, error };
+    }
+  };
+
+  const signOut = async () => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
-      return { success: true };
-    } catch (error) {
-      console.error('Logout error:', error);
-      return { success: false, error: error.message };
-    } finally {
-      updateAuthState({ loading: false });
-    }
-  };
-
-  const resetPassword = async (email) => {
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+      setAuthState({
+        user: null,
+        userProfile: null,
+        loading: false
       });
       
-      if (error) throw error;
-      return { success: true };
+      return { error: null };
     } catch (error) {
-      console.error('Reset password error:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const updatePassword = async (newPassword) => {
-    try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
-      return { success: true };
-    } catch (error) {
-      console.error('Update password error:', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  const updateFirstLoginStatus = async (value) => {
-    if (!authState.user) return { success: false, error: 'User not authenticated' };
-    
-    try {
-      const { error } = await updateFirstLogin(authState.user.id, value);
-      if (error) throw error;
-      
-      updateAuthState({ firstLogin: value });
-      return { success: true };
-    } catch (error) {
-      console.error('Update first login error:', error);
-      return { success: false, error: error.message };
+      console.error('Sign out error:', error);
+      return { error };
     }
   };
 
   const value = {
-    ...authState,
-    login,
-    logout,
-    resetPassword,
-    updatePassword,
-    updateFirstLoginStatus
+    user: authState.user,
+    userProfile: authState.userProfile,
+    loading: authState.loading,
+    signIn,
+    signOut,
+    logout: signOut, // Alias for backward compatibility
+    signUp,
+    refreshUserProfile
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };

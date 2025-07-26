@@ -10,10 +10,19 @@
   padding: 0;
 }
 
-body {
+html, body {
   margin: 0;
+  padding: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden; /* Ngăn scroll ngang */
+  max-width: 100vw; /* Không vượt quá viewport */
+}
+
+#root {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 a {

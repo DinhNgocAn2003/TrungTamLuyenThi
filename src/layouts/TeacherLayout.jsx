@@ -23,12 +23,6 @@ import {
   Badge,
   Paper,
   Chip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  CircularProgress,
   alpha
 } from '@mui/material';
 import {
@@ -36,98 +30,64 @@ import {
   Dashboard as DashboardIcon,
   Class as ClassIcon,
   EventNote as EventNoteIcon,
-  Payment as PaymentIcon,
+  Assignment as AssignmentIcon,
+  Grade as GradeIcon,
   Logout as LogoutIcon,
   Settings as SettingsIcon,
   ChevronLeft as ChevronLeftIcon,
-  QrCode as QrCodeIcon,
   School as SchoolIcon,
   Notifications as NotificationsIcon,
   Home as HomeIcon,
-  Download as DownloadIcon,
   Person as PersonIcon
 } from '@mui/icons-material';
-import QRCode from 'qrcode.react';
 import logo from '../assets/logo.png';
 
 import { useAuth } from '../contexts/AuthContext';
 import { useNotification } from '../contexts/NotificationContext';
-import { getStudentByUserId } from '../services/supabase/database';
 
 const drawerWidth = 280;
 const drawerWidthMobile = 260;
 
-// Dynamic menu items based on role
-const getMenuItems = (role) => {
-  const baseItems = [
-    { 
-      title: 'Trang chủ', 
-      path: `/${role}/dashboard`, 
-      icon: <HomeIcon />, 
-      color: '#4caf50',
-      description: 'Dashboard và thông tin tổng quan'
-    }
-  ];
+const menuItems = [
+  { 
+    title: 'Trang chủ', 
+    path: '/user/teacher/dashboard', 
+    icon: <HomeIcon />, 
+    color: '#4caf50',
+    description: 'Dashboard và thông tin tổng quan'
+  },
+  { 
+    title: 'Lớp học của tôi', 
+    path: '/user/teacher/classes', 
+    icon: <ClassIcon />, 
+    color: '#2196f3',
+    description: 'Quản lý các lớp học đang giảng dạy'
+  },
+  { 
+    title: 'Điểm danh', 
+    path: '/user/teacher/attendance', 
+    icon: <EventNoteIcon />, 
+    color: '#ff9800',
+    description: 'Điểm danh học sinh trong lớp'
+  },
+  { 
+    title: 'Quản lý bài kiểm tra', 
+    path: '/user/teacher/tests', 
+    icon: <AssignmentIcon />, 
+    color: '#9c27b0',
+    description: 'Tạo và thông báo lịch kiểm tra'
+  },
+  { 
+    title: 'Nhập điểm', 
+    path: '/user/teacher/grades', 
+    icon: <GradeIcon />, 
+    color: '#f44336',
+    description: 'Nhập điểm kiểm tra và tính hệ số'
+  },
+];
 
-  if (role === 'student') {
-    return [
-      ...baseItems,
-      { 
-        title: 'Đăng ký lớp học', 
-        path: '/student/classes', 
-        icon: <ClassIcon />, 
-        color: '#2196f3',
-        description: 'Tìm kiếm và đăng ký lớp học mới'
-      },
-      { 
-        title: 'Điểm danh', 
-        path: '/student/attendance', 
-        icon: <EventNoteIcon />, 
-        color: '#ff9800',
-        description: 'Xem lịch sử điểm danh'
-      },
-      { 
-        title: 'Thanh toán', 
-        path: '/student/payments', 
-        icon: <PaymentIcon />, 
-        color: '#9c27b0',
-        description: 'Quản lý học phí và thanh toán'
-      }
-    ];
-  }
-
-  if (role === 'teacher') {
-    return [
-      ...baseItems,
-      { 
-        title: 'Lớp học của tôi', 
-        path: '/teacher/classes', 
-        icon: <ClassIcon />, 
-        color: '#2196f3',
-        description: 'Quản lý các lớp học đang dạy'
-      },
-      { 
-        title: 'Điểm danh', 
-        path: '/teacher/attendance', 
-        icon: <EventNoteIcon />, 
-        color: '#ff9800',
-        description: 'Điểm danh học sinh'
-      },
-      { 
-        title: 'Thanh toán', 
-        path: '/teacher/payments', 
-        icon: <PaymentIcon />, 
-        color: '#9c27b0',
-        description: 'Xem thông tin lương và thanh toán'
-      }
-    ];
-  }
-
-  return baseItems;
-};
-
-function UserLayout() {
-  const { user, userProfile, logout } = useAuth();
+function TeacherLayout() {
+  const { user, logout } = useAuth();
   const { showNotification } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
@@ -136,26 +96,6 @@ function UserLayout() {
   
   const [drawerOpen, setDrawerOpen] = useState(!isMobile);
   const [anchorElUser, setAnchorElUser] = useState(null);
-  const [qrDialogOpen, setQrDialogOpen] = useState(false);
-  const [student, setStudent] = useState(null);
-  const [loadingStudent, setLoadingStudent] = useState(false);
-  
-  // Check if user has student or teacher role
-  useEffect(() => {
-    if (userProfile && userProfile.role === 'admin') {
-      console.log('❌ Access denied - admin should use admin layout');
-      showNotification('Bạn không có quyền truy cập trang này', 'error');
-      navigate('/admin/dashboard', { replace: true });
-    }
-  }, [userProfile, navigate, showNotification]);
-  
-  // Get menu items based on user role
-  const menuItems = getMenuItems(userProfile?.role || 'student');
-  
-  // Lấy thông tin học sinh khi component mount
-  useEffect(() => {
-    fetchStudentData();
-  }, [user]);
   
   // Handle responsive drawer behavior
   useEffect(() => {
@@ -165,21 +105,6 @@ function UserLayout() {
       setDrawerOpen(true); // Luôn mở trên desktop
     }
   }, [isMobile]);
-  
-  const fetchStudentData = async () => {
-    if (!user?.id) return;
-    
-    setLoadingStudent(true);
-    try {
-      const { data: studentData, error } = await getStudentByUserId(user.id);
-      if (error) throw error;
-      setStudent(studentData);
-    } catch (error) {
-      console.error('Error fetching student data:', error);
-    } finally {
-      setLoadingStudent(false);
-    }
-  };
   
   const handleDrawerToggle = () => {
     // Chỉ cho phép toggle trên mobile
@@ -213,73 +138,49 @@ function UserLayout() {
     navigate('/change-password');
   };
   
-  const handleOpenQRDialog = () => {
-    setQrDialogOpen(true);
-  };
-  
-  const handleCloseQRDialog = () => {
-    setQrDialogOpen(false);
-  };
-  
-  const handleDownloadQR = () => {
-    if (!student?.id) return;
-    
-    const canvas = document.querySelector("#qr-dialog canvas");
-    if (canvas) {
-      const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
-      let downloadLink = document.createElement("a");
-      downloadLink.href = pngUrl;
-      downloadLink.download = `QR_${student.id}_${student.full_name?.replace(/\s+/g, '_') || 'Student'}.png`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-    }
-  };
-  
   const getPageTitle = () => {
     const item = menuItems.find(item => item.path === location.pathname);
-    return item ? item.title : 'Học sinh';
+    return item ? item.title : 'Giáo viên';
   };
 
   return (
     <Box sx={{ 
       display: 'flex',
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #4caf50 0%, #388e3c 50%, #2e7d32 100%)',
-      bgcolor: 'background.default',
-      overflow: 'hidden', // Ngăn overflow
+      background: 'linear-gradient(135deg, #1e88e5 0%, #1976d2 50%, #1565c0 100%)',
+      overflow: 'hidden',
       width: '100%',
-      maxWidth: '100vw' // Đảm bảo không vượt quá viewport width
+      maxWidth: '100vw'
     }}>
-      {/* Modern AppBar with Glass Effect */}
+      {/* Modern Teacher AppBar */}
       <AppBar 
         position="fixed" 
         sx={{ 
           zIndex: theme.zIndex.drawer + 1,
           width: { 
             xs: '100%',
-            md: `calc(100% - ${drawerWidth}px)` // Luôn trừ drawer width trên desktop
+            md: `calc(100% - ${drawerWidth}px)`
           },
           ml: { 
             xs: 0,
-            md: `${drawerWidth}px` // Luôn có margin left trên desktop
+            md: `${drawerWidth}px`
           },
-          background: 'rgba(255, 255, 255, 0.95)',
+          background: 'rgba(255, 255, 255, 0.1)',
           backdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(30, 136, 229, 0.1)',
-          boxShadow: '0 2px 12px rgba(30, 136, 229, 0.1)',
-          color: 'text.primary',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 8px 32px rgba(31, 38, 135, 0.37)',
+          color: 'white',
           transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
           }),
-          maxWidth: '100vw', // Ngăn vượt quá viewport
-          overflowX: 'hidden' // Ẩn overflow ngang
+          maxWidth: '100vw',
+          overflowX: 'hidden'
         }}
       >
         <Toolbar sx={{ 
           minHeight: { xs: '64px', md: '70px' }, 
-          px: { xs: 1, md: 3 }, // Giảm padding trên mobile
+          px: { xs: 1, md: 3 },
           width: '100%',
           maxWidth: '100vw',
           overflow: 'hidden'
@@ -292,12 +193,10 @@ function UserLayout() {
               edge="start"
               onClick={handleDrawerToggle}
               sx={{ 
-                ml: 1,
                 mr: 2,
-                background: 'rgba(30, 136, 229, 0.1)',
-                color: 'primary.main',
+                background: 'rgba(255, 255, 255, 0.1)',
                 '&:hover': {
-                  background: 'rgba(30, 136, 229, 0.2)',
+                  background: 'rgba(255, 255, 255, 0.2)',
                   transform: 'scale(1.05)'
                 },
                 transition: 'all 0.3s ease'
@@ -313,54 +212,70 @@ function UserLayout() {
               src={logo}
               alt="Logo"
               sx={{ 
-                height: { xs: 28, md: 40 }, // Giảm size trên mobile
+                height: { xs: 28, md: 40 },
                 width: 'auto',
-                mr: { xs: 1, md: 2 }, // Giảm margin trên mobile
+                mr: { xs: 1, md: 2 },
                 borderRadius: 1,
-                flexShrink: 0 // Không cho logo bị shrink
+                flexShrink: 0
               }}
             />
-            <Typography 
-              variant="h5" 
-              noWrap 
-              component="div" 
-              sx={{ 
-                fontWeight: 700,
-                color: 'primary.main',
-                fontSize: { xs: '1rem', md: '1.5rem' }, // Giảm font size trên mobile
-                display: { xs: 'none', sm: 'block' },
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {getPageTitle()}
-            </Typography>
+            <SchoolIcon sx={{ mr: 1.5, fontSize: { xs: 24, md: 32 }, color: '#fff', flexShrink: 0 }} />
+            <Box sx={{ overflow: 'hidden', minWidth: 0 }}>
+              <Typography 
+                variant="h5" 
+                noWrap 
+                component="div" 
+                sx={{ 
+                  fontWeight: 700,
+                  background: 'linear-gradient(45deg, #fff, #f0f0f0)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  color: 'transparent',
+                  fontSize: { xs: '1rem', md: '1.5rem' },
+                  lineHeight: 1.2,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {getPageTitle()}
+              </Typography>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: 'rgba(255, 255, 255, 0.8)',
+                  fontSize: { xs: '0.7rem', md: '0.8rem' },
+                  display: { xs: 'none', sm: 'block' }
+                }}
+              >
+                Khu vực giáo viên
+              </Typography>
+            </Box>
           </Box>
           
           <Box sx={{ 
             display: 'flex', 
             alignItems: 'center', 
-            gap: { xs: 0.5, md: 1 }, // Giảm gap trên mobile
-            flexShrink: 0 // Không cho shrink
-          }}>            
-            <Tooltip title="Mã QR của bạn">
+            gap: { xs: 0.5, md: 1 },
+            flexShrink: 0
+          }}>
+            <Tooltip title="Thông báo">
               <IconButton
                 color="inherit"
-                onClick={handleOpenQRDialog}
                 sx={{ 
-                  background: 'rgba(30, 136, 229, 0.1)',
-                  color: 'primary.main',
+                  background: 'rgba(255, 255, 255, 0.1)',
                   '&:hover': { 
-                    background: 'rgba(30, 136, 229, 0.2)',
+                    background: 'rgba(255, 255, 255, 0.2)',
                     transform: 'scale(1.05)'
                   },
                   transition: 'all 0.3s ease',
-                  width: { xs: 36, md: 44 }, // Giảm size trên mobile
+                  width: { xs: 36, md: 44 },
                   height: { xs: 36, md: 44 }
                 }}
               >
-                <QrCodeIcon sx={{ fontSize: { xs: 18, md: 24 } }} />
+                <Badge badgeContent={3} color="error">
+                  <NotificationsIcon sx={{ fontSize: { xs: 18, md: 24 } }} />
+                </Badge>
               </IconButton>
             </Tooltip>
             
@@ -374,12 +289,12 @@ function UserLayout() {
                 }}
               >
                 <Avatar 
-                  alt={user?.user_metadata?.full_name || 'User'}
+                  alt={user?.user_metadata?.full_name || 'Teacher'}
                   sx={{
                     width: { xs: 36, md: 45 },
                     height: { xs: 36, md: 45 },
-                    background: 'linear-gradient(135deg, #1e88e5 0%, #26a69a 100%)',
-                    border: '2px solid rgba(30, 136, 229, 0.2)',
+                    background: 'linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%)',
+                    border: '2px solid rgba(255, 255, 255, 0.3)',
                     fontSize: { xs: '1rem', md: '1.2rem' },
                     fontWeight: 'bold',
                     color: 'white'
@@ -399,7 +314,7 @@ function UserLayout() {
                   borderRadius: '15px',
                   border: '1px solid rgba(255, 255, 255, 0.2)',
                   boxShadow: '0 8px 32px rgba(31, 38, 135, 0.37)',
-                  
+                  minWidth: 220
                 }
               }}
               id="menu-appbar"
@@ -413,11 +328,21 @@ function UserLayout() {
               <MenuItem disabled sx={{ opacity: 1 }}>
                 <Box sx={{ textAlign: 'center', width: '100%' }}>
                   <Typography variant="subtitle1" fontWeight="bold" color="primary">
-                    {user?.user_metadata?.full_name || 'Học sinh'}
+                    {user?.user_metadata?.full_name || 'Giáo viên'}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {user?.email}
                   </Typography>
+                  <Chip
+                    label="Teacher"
+                    size="small"
+                    sx={{
+                      mt: 1,
+                      background: 'linear-gradient(45deg, #4fc3f7, #29b6f6)',
+                      color: '#fff',
+                      fontWeight: 600
+                    }}
+                  />
                 </Box>
               </MenuItem>
               <Divider sx={{ my: 1 }} />
@@ -458,7 +383,7 @@ function UserLayout() {
         </Toolbar>
       </AppBar>
       
-      {/* Modern Sidebar with Glass Effect */}
+      {/* Modern Teacher Sidebar */}
       <Drawer
         variant={isMobile ? "temporary" : "permanent"} 
         open={drawerOpen}
@@ -469,29 +394,29 @@ function UserLayout() {
           '& .MuiDrawer-paper': {
             width: { xs: drawerWidthMobile, md: drawerWidth },
             boxSizing: 'border-box',
-            background: 'rgba(255, 255, 255, 0.95)',
+            background: 'rgba(255, 255, 255, 0.05)',
             backdropFilter: 'blur(20px)',
-            borderRight: '1px solid rgba(30, 136, 229, 0.1)',
-            boxShadow: '2px 0 12px rgba(30, 136, 229, 0.1)',
-            overflow: 'hidden auto', // Chỉ scroll theo chiều dọc
-            maxWidth: '100vw', // Không vượt quá viewport
+            borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 8px 32px rgba(31, 38, 135, 0.37)',
+            overflow: 'hidden auto',
+            maxWidth: '100vw',
             // Thin scrollbar styles
             '&::-webkit-scrollbar': {
               width: '6px',
             },
             '&::-webkit-scrollbar-track': {
-              background: 'rgba(30, 136, 229, 0.1)',
+              background: 'rgba(255, 255, 255, 0.1)',
               borderRadius: '3px',
             },
             '&::-webkit-scrollbar-thumb': {
-              background: 'rgba(30, 136, 229, 0.3)',
+              background: 'rgba(255, 255, 255, 0.3)',
               borderRadius: '3px',
               '&:hover': {
-                background: 'rgba(30, 136, 229, 0.5)',
+                background: 'rgba(255, 255, 255, 0.5)',
               },
             },
             scrollbarWidth: 'thin',
-            scrollbarColor: 'rgba(30, 136, 229, 0.3) rgba(30, 136, 229, 0.1)',
+            scrollbarColor: 'rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1)',
           },
         }}
       >
@@ -499,17 +424,17 @@ function UserLayout() {
         <Box sx={{ 
           p: { xs: 2, md: 3 }, 
           textAlign: 'center',
-          background: 'linear-gradient(135deg, rgba(30,136,229,0.1) 0%, rgba(38,166,154,0.1) 100%)',
-          borderBottom: '1px solid rgba(30, 136, 229, 0.1)'
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
         }}>
           <Paper
             elevation={0}
             sx={{
               p: { xs: 1.5, md: 2 },
-              background: 'rgba(255, 255, 255, 0.8)',
+              background: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'blur(10px)',
               borderRadius: '15px',
-              border: '1px solid rgba(30, 136, 229, 0.2)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
             }}
           >
             <Box 
@@ -526,36 +451,36 @@ function UserLayout() {
             <Typography 
               variant="h6" 
               sx={{ 
-                color: 'primary.main',
+                color: '#fff',
                 fontWeight: 700,
                 fontSize: { xs: '0.95rem', md: '1.1rem' }
               }}
             >
-              TRUNG TÂM DNA
+              GIÁO VIÊN
             </Typography>
             <Typography 
               variant="body2" 
               sx={{ 
-                color: 'text.secondary',
+                color: 'rgba(255, 255, 255, 0.8)',
                 mt: 0.5,
                 fontSize: { xs: '0.75rem', md: '0.875rem' }
               }}
             >
-              Nơi ươm mầm tương lai ✨
+              Khu vực quản lý lớp học 📚
             </Typography>
           </Paper>
         </Box>
         
-        {/* User Info Card */}
+        {/* Teacher Info Card */}
         <Box sx={{ p: { xs: 1.5, md: 2 } }}>
           <Paper
             elevation={0}
             sx={{
               p: { xs: 1.5, md: 2 },
-              background: 'rgba(255, 255, 255, 0.8)',
+              background: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'blur(10px)',
               borderRadius: '15px',
-              border: '1px solid rgba(30, 136, 229, 0.2)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
               textAlign: 'center'
             }}
           >
@@ -565,8 +490,8 @@ function UserLayout() {
                 height: { xs: 50, md: 60 },
                 mx: 'auto',
                 mb: 1,
-                background: 'linear-gradient(135deg, #1e88e5 0%, #26a69a 100%)',
-                border: '2px solid rgba(30, 136, 229, 0.3)',
+                background: 'linear-gradient(135deg, #4fc3f7 0%, #29b6f6 100%)',
+                border: '2px solid rgba(255, 255, 255, 0.3)',
                 fontSize: { xs: '1.2rem', md: '1.5rem' },
                 fontWeight: 'bold',
                 color: 'white'
@@ -577,19 +502,19 @@ function UserLayout() {
             <Typography 
               variant="subtitle1" 
               sx={{ 
-                color: 'text.primary', 
+                color: '#fff', 
                 fontWeight: 600,
                 fontSize: { xs: '0.85rem', md: '0.9rem' }
               }}
             >
-              {user?.user_metadata?.full_name || 'Học sinh'}
+              {user?.user_metadata?.full_name || 'Giáo viên'}
             </Typography>
             <Chip
-              label="Học sinh"
+              label="Teacher"
               size="small"
               sx={{
                 mt: 1,
-                background: 'linear-gradient(45deg, #26a69a, #1e88e5)',
+                background: 'linear-gradient(45deg, #4fc3f7, #29b6f6)',
                 color: '#fff',
                 fontWeight: 600,
                 fontSize: { xs: '0.7rem', md: '0.75rem' }
@@ -616,30 +541,30 @@ function UserLayout() {
                     borderRadius: '15px',
                     minHeight: { xs: 52, md: 60 },
                     background: location.pathname === item.path 
-                      ? 'rgba(30, 136, 229, 0.15)' 
+                      ? 'rgba(255, 255, 255, 0.15)' 
                       : 'transparent',
                     backdropFilter: location.pathname === item.path ? 'blur(10px)' : 'none',
                     border: location.pathname === item.path 
-                      ? '1px solid rgba(30, 136, 229, 0.2)' 
+                      ? '1px solid rgba(255, 255, 255, 0.2)' 
                       : '1px solid transparent',
                     '&:hover': {
-                      background: 'rgba(30, 136, 229, 0.1)',
+                      background: 'rgba(255, 255, 255, 0.1)',
                       backdropFilter: 'blur(10px)',
-                      border: '1px solid rgba(30, 136, 229, 0.2)',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
                       transform: 'translateX(5px)',
                     },
                     transition: 'all 0.3s ease',
                     '&.Mui-selected': {
-                      background: 'rgba(30, 136, 229, 0.15)',
+                      background: 'rgba(255, 255, 255, 0.15)',
                       '&:hover': {
-                        background: 'rgba(30, 136, 229, 0.2)',
+                        background: 'rgba(255, 255, 255, 0.2)',
                       }
                     }
                   }}
                 >
                   <ListItemIcon
                     sx={{
-                      color: location.pathname === item.path ? 'primary.main' : 'text.secondary',
+                      color: location.pathname === item.path ? '#fff' : 'rgba(255, 255, 255, 0.8)',
                       minWidth: { xs: 40, md: 45 }
                     }}
                   >
@@ -649,7 +574,7 @@ function UserLayout() {
                         borderRadius: '10px',
                         background: location.pathname === item.path 
                           ? `linear-gradient(135deg, ${item.color}40, ${item.color}60)`
-                          : 'rgba(30, 136, 229, 0.1)',
+                          : 'rgba(255, 255, 255, 0.1)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center'
@@ -662,7 +587,7 @@ function UserLayout() {
                     primary={
                       <Typography
                         sx={{
-                          color: location.pathname === item.path ? 'primary.main' : 'text.primary',
+                          color: location.pathname === item.path ? '#fff' : 'rgba(255, 255, 255, 0.9)',
                           fontWeight: location.pathname === item.path ? 600 : 500,
                           fontSize: { xs: '0.85rem', md: '0.9rem' }
                         }}
@@ -673,7 +598,7 @@ function UserLayout() {
                     secondary={
                       <Typography
                         sx={{
-                          color: 'text.secondary',
+                          color: 'rgba(255, 255, 255, 0.6)',
                           fontSize: { xs: '0.7rem', md: '0.75rem' },
                           mt: 0.5,
                           display: { xs: 'none', md: 'block' }
@@ -695,26 +620,26 @@ function UserLayout() {
             elevation={0}
             sx={{
               p: { xs: 1, md: 1.5 },
-              background: 'rgba(30, 136, 229, 0.05)',
+              background: 'rgba(255, 255, 255, 0.05)',
               borderRadius: '10px',
-              border: '1px solid rgba(30, 136, 229, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
               textAlign: 'center'
             }}
           >
             <Typography 
               variant="caption" 
               sx={{ 
-                color: 'text.secondary',
+                color: 'rgba(255, 255, 255, 0.7)',
                 display: 'block',
                 fontSize: { xs: '0.7rem', md: '0.75rem' }
               }}
             >
-              Phiên bản 1.0.0
+              Teacher Panel v1.0.0
             </Typography>
             <Typography 
               variant="caption" 
               sx={{ 
-                color: 'text.disabled',
+                color: 'rgba(255, 255, 255, 0.5)',
                 display: 'block',
                 fontSize: { xs: '0.65rem', md: '0.7rem' }
               }}
@@ -732,11 +657,11 @@ function UserLayout() {
           flexGrow: 1,
           width: { 
             xs: '100%',
-            md: `calc(100% - ${drawerWidth}px)` // Luôn trừ drawer width trên desktop
+            md: `calc(100% - ${drawerWidth}px)`
           },
           ml: { 
             xs: 0,
-            md: 0 // Không cần margin left trên desktop vì drawer là permanent
+            md: 0
           },
           transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
@@ -744,8 +669,8 @@ function UserLayout() {
           }),
           minHeight: '100vh',
           background: 'transparent',
-          maxWidth: '100vw', // Không vượt quá viewport
-          overflow: 'hidden auto', // Chỉ scroll theo chiều dọc
+          maxWidth: '100vw',
+          overflow: 'hidden auto',
           position: 'relative'
         }}
       >
@@ -755,160 +680,31 @@ function UserLayout() {
           sx={{ 
             mt: { xs: 2, md: 3 },
             pb: { xs: 3, md: 4 },
-            px: { xs: 1, md: 3 }, // Giảm padding trên mobile
+            px: { xs: 1, md: 3 },
             position: 'relative',
             width: '100%',
-            maxWidth: '100%', // Đảm bảo container không vượt quá parent
-            overflow: 'hidden'
+            maxWidth: '100%',
+            overflow: 'hidden',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: -20,
+              left: -20,
+              right: -20,
+              bottom: -20,
+              background: 'rgba(255, 255, 255, 0.05)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '20px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              zIndex: -1
+            }
           }}
         >
           <Outlet />
         </Container>
       </Box>
-      
-      {/* QR Code Dialog */}
-      <Dialog
-        open={qrDialogOpen}
-        onClose={handleCloseQRDialog}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: '20px',
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            boxShadow: '0 8px 32px rgba(31, 38, 135, 0.37)',
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          textAlign: 'center', 
-          pb: 1,
-          background: 'linear-gradient(135deg, #1e88e5 0%, #26a69a 100%)',
-          color: 'white',
-          borderTopLeftRadius: '20px',
-          borderTopRightRadius: '20px'
-        }}>
-          <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
-            <QrCodeIcon sx={{ fontSize: 28 }} />
-            <Typography variant="h6" fontWeight="bold">
-              Mã QR Học Sinh
-            </Typography>
-          </Box>
-        </DialogTitle>
-        
-        <DialogContent id="qr-dialog" sx={{ textAlign: 'center', py: 4 }}>
-          {loadingStudent ? (
-            <Box display="flex" flexDirection="column" alignItems="center" gap={2}>
-              <CircularProgress size={60} />
-              <Typography variant="body1" color="text.secondary">
-                Đang tải thông tin học sinh...
-              </Typography>
-            </Box>
-          ) : student?.id ? (
-            <Box display="flex" flexDirection="column" alignItems="center" gap={2}>
-              <Paper
-                elevation={3}
-                sx={{
-                  p: 2,
-                  background: 'white',
-                  borderRadius: '15px',
-                  border: '2px solid #1e88e5',
-                  display: 'inline-block'
-                }}
-              >
-                <QRCode 
-                  value={student.id} 
-                  size={200}
-                  level="H"
-                  includeMargin
-                  style={{
-                    background: 'white',
-                    borderRadius: '10px'
-                  }}
-                />
-              </Paper>
-              
-              <Box textAlign="center" mt={2}>
-                <Typography variant="h6" fontWeight="bold" color="primary.main" gutterBottom>
-                  {student.full_name}
-                </Typography>
-                <Chip
-                  label={`Mã học sinh: ${student.id}`}
-                  color="primary"
-                  variant="outlined"
-                  sx={{ 
-                    fontWeight: 'bold',
-                    fontSize: '0.9rem',
-                    px: 2,
-                    py: 0.5
-                  }}
-                />
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                  💡 Sử dụng mã QR này để điểm danh trong lớp học
-                </Typography>
-              </Box>
-            </Box>
-          ) : (
-            <Box display="flex" flexDirection="column" alignItems="center" gap={2}>
-              <QrCodeIcon sx={{ fontSize: 80, color: 'text.disabled' }} />
-              <Typography variant="h6" color="error.main" fontWeight="bold">
-                Không tìm thấy thông tin học sinh
-              </Typography>
-              <Typography variant="body2" color="text.secondary" textAlign="center">
-                Vui lòng liên hệ với quản trị viên để cập nhật thông tin học sinh
-              </Typography>
-            </Box>
-          )}
-        </DialogContent>
-        
-        <DialogActions sx={{ justifyContent: 'center', pb: 3, gap: 1 }}>
-          {student?.id && !loadingStudent && (
-            <Button
-              variant="contained"
-              startIcon={<DownloadIcon />}
-              onClick={handleDownloadQR}
-              sx={{
-                background: 'linear-gradient(135deg, #26a69a 0%, #1e88e5 100%)',
-                color: 'white',
-                fontWeight: 'bold',
-                borderRadius: '25px',
-                px: 3,
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #1e88e5 0%, #26a69a 100%)',
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 8px 25px rgba(30, 136, 229, 0.4)'
-                },
-                transition: 'all 0.3s ease'
-              }}
-            >
-              Tải xuống mã QR
-            </Button>
-          )}
-          <Button
-            variant="outlined"
-            onClick={handleCloseQRDialog}
-            sx={{
-              borderRadius: '25px',
-              px: 3,
-              fontWeight: 'bold',
-              borderColor: '#1e88e5',
-              color: '#1e88e5',
-              '&:hover': {
-                borderColor: '#1565c0',
-                backgroundColor: 'rgba(30, 136, 229, 0.1)',
-                transform: 'translateY(-2px)'
-              },
-              transition: 'all 0.3s ease'
-            }}
-          >
-            Đóng
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }
 
-export default UserLayout;
+export default TeacherLayout;

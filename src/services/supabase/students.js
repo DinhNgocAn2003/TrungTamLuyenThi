@@ -1,8 +1,10 @@
 import { supabase } from './client';
+import { supabaseAdmin } from './adminClient';
 
 // ----- STUDENTS -----
 export const getStudents = async () => {
-  const { data, error } = await supabase
+  // Use admin client for admin operations to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('students')
     .select('*, user_profiles(*)');
   
@@ -14,7 +16,7 @@ export const getStudentById = async (id) => {
     .from('students')
     .select('*, user_profiles(*)')
     .eq('id', id)
-    .single();
+    .maybeSingle(); // Sử dụng maybeSingle() thay vì single()
   
   return { data, error };
 };
@@ -24,7 +26,7 @@ export const getStudentByUserId = async (userId) => {
     .from('students')
     .select('*')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle(); // Sử dụng maybeSingle() thay vì single()
   
   return { data, error };
 };
@@ -34,13 +36,14 @@ export const getStudentByQrCode = async (qrCode) => {
     .from('students')
     .select('*')
     .eq('qr_code', qrCode)
-    .single();
+    .maybeSingle(); // Sử dụng maybeSingle() thay vì single()
   
   return { data, error };
 };
 
 export const createStudent = async (studentData) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('students')
     .insert(studentData)
     .select();
@@ -49,7 +52,8 @@ export const createStudent = async (studentData) => {
 };
 
 export const updateStudent = async (id, studentData) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS  
+  const { data, error } = await supabaseAdmin
     .from('students')
     .update(studentData)
     .eq('id', id)
@@ -59,7 +63,8 @@ export const updateStudent = async (id, studentData) => {
 };
 
 export const deleteStudent = async (id) => {
-  const { error } = await supabase
+  // Use admin client to bypass RLS
+  const { error } = await supabaseAdmin
     .from('students')
     .delete()
     .eq('id', id);

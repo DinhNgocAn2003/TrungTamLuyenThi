@@ -84,7 +84,8 @@ function App() {
                       <AdminLayout />
                     }
                   >
-                    <Route index  element={<AdminDashboard />} />
+                    <Route index element={<Navigate to="/admin/dashboard" replace />} />
+                    <Route path="dashboard" element={<AdminDashboard />} />
                     <Route path="classes" element={<Classes />} />
                     <Route path="students" element={<Students />} />
                     <Route path="payments" element={<Payments />} />
@@ -92,20 +93,39 @@ function App() {
                     <Route path="users" element={<UserManagement />} />
                   </Route>
 
-                  {/* Protected User Routes */}
+                  {/* Protected Student Routes */}
                   <Route 
-                    path="/user" 
+                    path="/student" 
                     element={
                       <UserLayout />
                     }
                   >
-                    <Route index path="" element={<UserDashboard />} />
+                    <Route index element={<Navigate to="/student/dashboard" replace />} />
+                    <Route path="dashboard" element={<UserDashboard />} />
                     <Route path="classes" element={<UserClasses />} />
                     <Route path="attendance" element={<UserAttendance />} />
                     <Route path="payments" element={<UserPayments />} />
-                    {/* <Route path="grades" element={<UserGrades />} /> */}
-                    {/* <Route path="profile" element={<UserProfile />} /> */}
                   </Route>
+
+                  {/* Protected Teacher Routes */}
+                  <Route 
+                    path="/teacher" 
+                    element={
+                      <UserLayout />
+                    }
+                  >
+                    <Route index element={<Navigate to="/teacher/dashboard" replace />} />
+                    <Route path="dashboard" element={<UserDashboard />} />
+                    <Route path="classes" element={<UserClasses />} />
+                    <Route path="attendance" element={<UserAttendance />} />
+                    <Route path="payments" element={<UserPayments />} />
+                  </Route>
+
+                  {/* Legacy User Routes - redirect to role-specific routes */}
+                  <Route 
+                    path="/user/*" 
+                    element={<Navigate to="/login" replace />}
+                  />
 
                   {/* Redirects based on auth status */}
                   <Route 

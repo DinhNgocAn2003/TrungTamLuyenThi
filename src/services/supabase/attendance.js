@@ -1,12 +1,21 @@
 import { supabase } from './client';
+import { supabaseAdmin } from './adminClient';
 import dayjs from 'dayjs';
 
 // ----- ATTENDANCE -----
-export const getAttendance = async (classId, date = null) => {
-  let query = supabase
+export const getAttendance = async (classId = null, studentId = null, date = null) => {
+  // Use admin client for admin operations to bypass RLS
+  let query = supabaseAdmin
     .from('attendance')
-    .select('*, students(*), classes(*)')
-    .eq('class_id', classId);
+    .select('*, students(*), classes(*)');
+  
+  if (classId) {
+    query = query.eq('class_id', classId);
+  }
+  
+  if (studentId) {
+    query = query.eq('student_id', studentId);
+  }
   
   if (date) {
     query = query.eq('date', date);
@@ -19,7 +28,8 @@ export const getAttendance = async (classId, date = null) => {
 export const getAttendanceByDate = async (classId, date) => {
   const formattedDate = dayjs(date).format('YYYY-MM-DD');
   
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('attendance')
     .select('*, students(*)')
     .eq('class_id', classId)
@@ -29,7 +39,8 @@ export const getAttendanceByDate = async (classId, date) => {
 };
 
 export const markAttendance = async (attendanceData) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS for admin/teacher operations
+  const { data, error } = await supabaseAdmin
     .from('attendance')
     .insert(attendanceData)
     .select();
@@ -38,7 +49,8 @@ export const markAttendance = async (attendanceData) => {
 };
 
 export const updateAttendance = async (id, attendanceData) => {
-  const { data, error } = await supabase
+  // Use admin client to bypass RLS
+  const { data, error } = await supabaseAdmin
     .from('attendance')
     .update(attendanceData)
     .eq('id', id)

@@ -5,6 +5,7 @@ import { CircularProgress, Box } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import AdminLayout from '../layouts/AdminLayout';
 import UserLayout from '../layouts/UserLayout';
+import TeacherLayout from '../layouts/TeacherLayout';
 import AuthLayout from '../layouts/AuthLayout';
 
 // Lazy load components for better performance
@@ -22,12 +23,23 @@ const Attendance = lazy(() => import('../pages/admin/Attendance'));
 const Payments = lazy(() => import('../pages/admin/Payments'));
 const Reports = lazy(() => import('../pages/admin/Reports'));
 
-// User pages
-const UserDashboard = lazy(() => import('../pages/user/UserDashboard'));
+// Teacher pages
+const TeacherDashboard = lazy(() => import('../pages/teacher/TeacherDashboard'));
+const TeacherClasses = lazy(() => import('../pages/teacher/TeacherClasses'));
+const TeacherAttendance = lazy(() => import('../pages/teacher/TeacherAttendance'));
+const TeacherTests = lazy(() => import('../pages/teacher/TeacherTests'));
+const TeacherGrades = lazy(() => import('../pages/teacher/TeacherGrades'));
+
+// Student pages
+const StudentDashboard = lazy(() => import('../pages/user/UserDashboard'));
 const ClassRegistration = lazy(() => import('../pages/user/ClassRegistration'));
-const UserAttendance = lazy(() => import('../pages/user/UserAttendance'));
-const UserPayments = lazy(() => import('../pages/user/UserPayments'));
+const StudentAttendance = lazy(() => import('../pages/user/UserAttendance'));
+const StudentPayments = lazy(() => import('../pages/user/UserPayments'));
 const ClassDetails = lazy(() => import('../pages/user/ClassDetails'));
+
+// 404 and Unauthorized pages
+const NotFound = lazy(() => import('../pages/NotFound'));
+const Unauthorized = lazy(() => import('../pages/Unauthorized'));
 
 // Loading fallback
 const LoadingFallback = () => (
@@ -45,7 +57,7 @@ const LoadingFallback = () => (
 
 // Protected route components
 const AdminRoute = ({ children }) => {
-  const { user, isLoading, isFirstLogin } = useAuth();
+  const { user, userProfile, isLoading, isFirstLogin } = useAuth();
   
   if (isLoading) {
     return <LoadingFallback />;
@@ -59,16 +71,21 @@ const AdminRoute = ({ children }) => {
     return <Navigate to="/change-password" />;
   }
   
-  const userRole = user.user_metadata?.role;
-  if (userRole !== 'admin' && userRole !== 'teacher') {
+  const roleFromMetadata = user.user_metadata?.role;
+  const roleFromProfile = userProfile?.role;
+  const userRole = roleFromMetadata || roleFromProfile;
+  
+  console.log('AdminRoute - checking role:', { roleFromMetadata, roleFromProfile, userRole });
+  
+  if (userRole !== 'admin') {
     return <Navigate to="/unauthorized" />;
   }
   
   return children;
 };
 
-const UserRoute = ({ children }) => {
-  const { user, isLoading, isFirstLogin } = useAuth();
+const TeacherRoute = ({ children }) => {
+  const { user, userProfile, isLoading, isFirstLogin } = useAuth();
   
   if (isLoading) {
     return <LoadingFallback />;
@@ -80,6 +97,44 @@ const UserRoute = ({ children }) => {
   
   if (isFirstLogin) {
     return <Navigate to="/change-password" />;
+  }
+  
+  const roleFromMetadata = user.user_metadata?.role;
+  const roleFromProfile = userProfile?.role;
+  const userRole = roleFromMetadata || roleFromProfile;
+  
+  console.log('TeacherRoute - checking role:', { roleFromMetadata, roleFromProfile, userRole });
+  
+  if (userRole !== 'teacher') {
+    return <Navigate to="/unauthorized" />;
+  }
+  
+  return children;
+};
+
+const StudentRoute = ({ children }) => {
+  const { user, userProfile, isLoading, isFirstLogin } = useAuth();
+  
+  if (isLoading) {
+    return <LoadingFallback />;
+  }
+  
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+  
+  if (isFirstLogin) {
+    return <Navigate to="/change-password" />;
+  }
+  
+  const roleFromMetadata = user.user_metadata?.role;
+  const roleFromProfile = userProfile?.role;
+  const userRole = roleFromMetadata || roleFromProfile;
+  
+  console.log('StudentRoute - checking role:', { roleFromMetadata, roleFromProfile, userRole });
+  
+  if (userRole !== 'student') {
+    return <Navigate to="/unauthorized" />;
   }
   
   return children;
@@ -106,13 +161,14 @@ const AppRoutes = () => {
           <Route path="forgot-password" element={<ForgotPassword />} />
         </Route>
         
-        {/* Admin routes */}
+        {/* Admin routes - /admin/* */}
         <Route path="/admin" element={
           <AdminRoute>
             <AdminLayout />
           </AdminRoute>
         }>
-          <Route index element={<AdminDashboard />} />
+          <Route index element={<Navigate to="/admin/dashboard" />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="subjects" element={<SubjectManagement />} />
           <Route path="classes" element={<ClassManagement />} />
           <Route path="students" element={<StudentManagement />} />
@@ -122,21 +178,38 @@ const AppRoutes = () => {
           <Route path="reports" element={<Reports />} />
         </Route>
         
-        {/* User routes */}
-        <Route path="/user" element={
-          <UserRoute>
-            <UserLayout />
-          </UserRoute>
+        {/* Teacher routes - /user/teacher/* */}
+        <Route path="/user/teacher" element={
+          <TeacherRoute>
+            <TeacherLayout />
+          </TeacherRoute>
         }>
-          <Route index element={<Navigate to="/user/dashboard" />} />
-          <Route path="" element={<UserDashboard />} />
-          <Route path="class-registration" element={<ClassRegistration />} />
-          <Route path="attendance" element={<UserAttendance />} />
-          <Route path="payments" element={<UserPayments />} />
+          <Route index element={<Navigate to="/user/teacher/dashboard" />} />
+          <Route path="dashboard" element={<TeacherDashboard />} />
+          <Route path="classes" element={<TeacherClasses />} />
+          <Route path="attendance" element={<TeacherAttendance />} />
+          <Route path="tests" element={<TeacherTests />} />
+          <Route path="grades" element={<TeacherGrades />} />
+        </Route>
+        
+        {/* Student routes - /user/student/* */}
+        <Route path="/user/student" element={
+          <StudentRoute>
+            <UserLayout />
+          </StudentRoute>
+        }>
+          <Route index element={<Navigate to="/user/student/dashboard" />} />
+          <Route path="dashboard" element={<StudentDashboard />} />
+          <Route path="classes" element={<ClassRegistration />} />
+          <Route path="attendance" element={<StudentAttendance />} />
+          <Route path="payments" element={<StudentPayments />} />
           <Route path="classes/:id" element={<ClassDetails />} />
         </Route>
         
-        {/* Fallback route */}
+        {/* Error pages */}
+        <Route path="/unauthorized" element={<Unauthorized />} />
+        
+        {/* Fallback routes */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Suspense>

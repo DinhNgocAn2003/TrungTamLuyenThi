@@ -400,7 +400,7 @@ const fetchStudentData = async () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseSuccessDialog}>Đóng</Button>
-          <Button href="/user/dashboard" variant="contained" color="primary">
+          <Button href="/user" variant="contained" color="primary">
             Về trang chủ
           </Button>
         </DialogActions>

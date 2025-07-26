@@ -76,7 +76,7 @@ function ClassDetails() {
       
       if (!classInfo) {
         showNotification('Không tìm thấy thông tin lớp học', 'error');
-        navigate('/user/class-registration');
+        navigate('/user/classes');
         return;
       }
       
@@ -289,7 +289,7 @@ function ClassDetails() {
                 <Button
                   variant="contained"
                   color="primary"
-                  onClick={() => navigate('/user/class-registration')}
+                  onClick={() => navigate('/user/classes')}
                 >
                   Đăng ký ngay
                 </Button>
