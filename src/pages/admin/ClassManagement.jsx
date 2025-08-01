@@ -32,7 +32,6 @@ import {
   ListItemSecondaryAction,
   Autocomplete,
 } from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -44,7 +43,6 @@ import BookIcon from '@mui/icons-material/Book';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import dayjs from 'dayjs';
 
 import { 
   getClasses, 
@@ -92,8 +90,6 @@ function ClassManagement() {
     fee: 0,
     max_students: 20,
     schedule: '',
-    start_date: dayjs(),
-    end_date: dayjs().add(3, 'month'),
     is_active: true
   });
 
@@ -203,9 +199,7 @@ function ClassManagement() {
   const handleOpenDialog = (classItem = null) => {
     if (classItem) {
       setFormData({
-        ...classItem,
-        start_date: dayjs(classItem.start_date),
-        end_date: dayjs(classItem.end_date)
+        ...classItem
       });
     } else {
       setFormData({
@@ -216,8 +210,6 @@ function ClassManagement() {
         fee: 0,
         max_students: 20,
         schedule: '',
-        start_date: dayjs(),
-        end_date: dayjs().add(3, 'month'),
         is_active: true
       });
     }
@@ -276,10 +268,7 @@ function ClassManagement() {
   };
 
   const handleDateChange = (field, value) => {
-    setFormData({
-      ...formData,
-      [field]: value
-    });
+    // Remove date handling since we don't use dates anymore
   };
 
   const handleSubmit = async () => {
@@ -292,8 +281,6 @@ function ClassManagement() {
 
       const classData = {
         ...formData,
-        start_date: formData.start_date.format('YYYY-MM-DD'),
-        end_date: formData.end_date.format('YYYY-MM-DD'),
         fee: Number(formData.fee),
         max_students: Number(formData.max_students)
       };
@@ -599,16 +586,6 @@ function ClassManagement() {
                   </Grid>
                   
                   <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle1" gutterBottom>Ngày bắt đầu</Typography>
-                    <Typography variant="body1" paragraph>
-                      {dayjs(selectedClass.start_date).format('DD/MM/YYYY')}
-                    </Typography>
-                    
-                    <Typography variant="subtitle1" gutterBottom>Ngày kết thúc</Typography>
-                    <Typography variant="body1" paragraph>
-                      {dayjs(selectedClass.end_date).format('DD/MM/YYYY')}
-                    </Typography>
-                    
                     <Typography variant="subtitle1" gutterBottom>Ghi chú lịch học</Typography>
                     <Typography variant="body1" paragraph>
                       {selectedClass.schedule || 'Xem tab Lịch học'}
@@ -781,21 +758,14 @@ function ClassManagement() {
                     </Typography>
                   )}
 
-                  <Box mt={3}>
-                    <Typography variant="subtitle1" gutterBottom>Thời gian học</Typography>
-                    <Typography variant="body1" paragraph>
-                      Từ {dayjs(selectedClass.start_date).format('DD/MM/YYYY')} đến {dayjs(selectedClass.end_date).format('DD/MM/YYYY')}
-                    </Typography>
-                    
-                    {selectedClass.schedule && (
-                      <>
-                        <Typography variant="subtitle1" gutterBottom>Ghi chú lịch học</Typography>
-                        <Typography variant="body1" paragraph>
-                          {selectedClass.schedule}
-                        </Typography>
-                      </>
-                    )}
-                  </Box>
+                  {selectedClass.schedule && (
+                    <Box mt={3}>
+                      <Typography variant="subtitle1" gutterBottom>Ghi chú lịch học</Typography>
+                      <Typography variant="body1" paragraph>
+                        {selectedClass.schedule}
+                      </Typography>
+                    </Box>
+                  )}
                 </>
               )}
             </Paper>
@@ -878,24 +848,6 @@ function ClassManagement() {
                 onChange={handleInputChange}
                 margin="normal"
                 required
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <DatePicker
-                label="Ngày bắt đầu"
-                value={formData.start_date}
-                onChange={(value) => handleDateChange('start_date', value)}
-                slotProps={{ textField: { fullWidth: true, margin: 'normal' } }}
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <DatePicker
-                label="Ngày kết thúc"
-                value={formData.end_date}
-                onChange={(value) => handleDateChange('end_date', value)}
-                slotProps={{ textField: { fullWidth: true, margin: 'normal' } }}
               />
             </Grid>
             

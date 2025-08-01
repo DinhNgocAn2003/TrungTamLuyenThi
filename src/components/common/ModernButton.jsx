@@ -1,7 +1,7 @@
 import { Button, alpha } from '@mui/material';
 import { styled } from '@mui/material/styles';
 
-const GradientButton = styled(Button)(({ theme, gradient = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }) => ({
+const GradientButton = styled(Button)(({ theme, gradient = 'linear-gradient(135deg, #5c9bd5 0%, #70a288 100%)' }) => ({
   background: gradient,
   borderRadius: '15px',
   border: 'none',
@@ -27,8 +27,8 @@ const GradientButton = styled(Button)(({ theme, gradient = 'linear-gradient(135d
   },
   
   '&:hover': {
-    transform: 'translateY(-2px)',
-    boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+    transform: 'translateY(-1px)', // Less movement
+    boxShadow: '0 6px 20px rgba(0,0,0,0.12)', // Softer shadow
     
     '&::before': {
       opacity: 1
@@ -64,8 +64,8 @@ const GlassButton = styled(Button)(({ theme }) => ({
   
   '&:hover': {
     background: 'rgba(255, 255, 255, 0.2)',
-    transform: 'translateY(-2px)',
-    boxShadow: '0 8px 25px rgba(0,0,0,0.15)',
+    transform: 'translateY(-1px)', // Less movement
+    boxShadow: '0 6px 20px rgba(0,0,0,0.12)', // Softer shadow
   },
   
   '&:active': {
@@ -73,7 +73,7 @@ const GlassButton = styled(Button)(({ theme }) => ({
   }
 }));
 
-const OutlineButton = styled(Button)(({ theme, color = '#667eea' }) => ({
+const OutlineButton = styled(Button)(({ theme, color = '#5c9bd5' }) => ({
   background: 'transparent',
   borderRadius: '15px',
   border: `2px solid ${color}`,
@@ -87,8 +87,8 @@ const OutlineButton = styled(Button)(({ theme, color = '#667eea' }) => ({
   '&:hover': {
     background: color,
     color: '#fff',
-    transform: 'translateY(-2px)',
-    boxShadow: `0 8px 25px ${alpha(color, 0.3)}`,
+    transform: 'translateY(-1px)', // Less movement
+    boxShadow: `0 6px 20px ${alpha(color, 0.25)}`, // Softer shadow
   },
   
   '&:active': {

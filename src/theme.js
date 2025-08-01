@@ -1,111 +1,111 @@
 import { createTheme } from '@mui/material/styles';
 
-// Educational color palette - friendly, professional, and accessible
+// Educational color palette - gentle, soothing, and accessible
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#1e88e5', // Bright blue - trust, knowledge, stability
-      light: '#6bb6ff',
-      dark: '#005cb2',
+      main: '#5c9bd5', // Softer blue - calm, trustworthy
+      light: '#8bb8e8',
+      dark: '#3a7bc8',
       contrastText: '#fff',
     },
     secondary: {
-      main: '#26a69a', // Teal green - growth, success, nature
-      light: '#64d8cb',
-      dark: '#00766c',
+      main: '#70a288', // Muted sage green - peaceful, balanced
+      light: '#9bc5a4',
+      dark: '#4a7c59',
       contrastText: '#fff',
     },
     background: {
-      default: '#f8fafb', // Very light blue-grey
+      default: '#fafbfc', // Softer light grey-blue
       paper: '#ffffff',
     },
     text: {
-      primary: '#2c3e50', // Dark blue-grey for better readability
-      secondary: '#546e7a',
+      primary: '#3d4852', // Softer dark grey for better readability
+      secondary: '#6b7280',
     },
     success: {
-      main: '#66bb6a', // Friendly green
-      light: '#98ee99',
-      dark: '#338a3e',
+      main: '#81c784', // Gentle green
+      light: '#a5d6a7',
+      dark: '#4caf50',
     },
     warning: {
-      main: '#ffa726', // Warm orange
-      light: '#ffd95a',
-      dark: '#c77800',
+      main: '#ffb74d', // Soft warm orange
+      light: '#ffcc80',
+      dark: '#ff9800',
     },
     error: {
-      main: '#ef5350', // Soft red
-      light: '#ff867f',
-      dark: '#b61827',
+      main: '#e57373', // Muted coral red
+      light: '#ef9a9a',
+      dark: '#c62828',
     },
     info: {
-      main: '#42a5f5', // Light blue
-      light: '#80d6ff',
-      dark: '#0077c2',
+      main: '#64b5f6', // Gentle sky blue
+      light: '#90caf9',
+      dark: '#1976d2',
     },
-    // Custom educational colors
+    // Custom educational colors - all softened
     education: {
-      primary: '#1e88e5',    // Blue - Knowledge & Trust
-      secondary: '#4caf50',  // Green - Growth & Success  
-      teacher: '#2196f3',    // Light Blue - Teacher role
-      student: '#4caf50',    // Green - Student role
-      admin: '#f44336',      // Red - Admin role
-      accent: '#9c27b0',     // Purple for highlights
-      gold: '#ff9800',       // Orange for achievements
-      lightBlue: '#e3f2fd',
-      lightGreen: '#e8f5e8',
-      lightPurple: '#f3e5f5',
-      lightOrange: '#fff3e0',
-      lightRed: '#ffebee',
+      primary: '#5c9bd5',    // Soft blue - Knowledge & Trust
+      secondary: '#81c784',  // Gentle green - Growth & Success  
+      teacher: '#7bb3f0',    // Soft light blue - Teacher role
+      student: '#81c784',    // Gentle green - Student role
+      admin: '#e57373',      // Muted coral - Admin role
+      accent: '#ba68c8',     // Soft purple for highlights
+      gold: '#ffc107',       // Warm golden yellow for achievements
+      lightBlue: '#e8f4fd',
+      lightGreen: '#f1f8e9',
+      lightPurple: '#f8f3ff',
+      lightOrange: '#fff8e1',
+      lightRed: '#ffeaea',
     },
   },
   typography: {
     fontFamily: '"Inter", "Roboto", "Segoe UI", sans-serif',
     h1: {
       fontSize: '2.5rem',
-      fontWeight: 700,
+      fontWeight: 600, // Lighter weight
       lineHeight: 1.2,
-      color: '#2c3e50',
+      color: '#3d4852', // Softer color
     },
     h2: {
       fontSize: '2rem',
-      fontWeight: 600,
+      fontWeight: 500, // Lighter weight
       lineHeight: 1.3,
-      color: '#2c3e50',
+      color: '#3d4852',
     },
     h3: {
       fontSize: '1.8rem',
-      fontWeight: 600,
+      fontWeight: 500,
       lineHeight: 1.3,
-      color: '#2c3e50',
+      color: '#3d4852',
     },
     h4: {
       fontSize: '1.5rem',
-      fontWeight: 600,
+      fontWeight: 500,
       lineHeight: 1.4,
-      color: '#2c3e50',
+      color: '#3d4852',
     },
     h5: {
       fontSize: '1.25rem',
-      fontWeight: 600,
+      fontWeight: 500,
       lineHeight: 1.4,
-      color: '#2c3e50',
+      color: '#3d4852',
     },
     h6: {
       fontSize: '1.1rem',
-      fontWeight: 600,
+      fontWeight: 500,
       lineHeight: 1.4,
-      color: '#2c3e50',
+      color: '#3d4852',
     },
     body1: {
       fontSize: '1rem',
       lineHeight: 1.6,
-      color: '#2c3e50',
+      color: '#3d4852',
     },
     body2: {
       fontSize: '0.875rem',
       lineHeight: 1.6,
-      color: '#546e7a',
+      color: '#6b7280',
     },
     button: {
       textTransform: 'none',
@@ -141,15 +141,15 @@ const theme = createTheme({
           },
         },
         containedPrimary: {
-          background: 'linear-gradient(135deg, #1e88e5 0%, #1565c0 100%)',
+          background: 'linear-gradient(135deg, #5c9bd5 0%, #4a90d9 100%)', // Softer gradient
           '&:hover': {
-            background: 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
+            background: 'linear-gradient(135deg, #4a90d9 0%, #3a7bc8 100%)',
           },
         },
         containedSecondary: {
-          background: 'linear-gradient(135deg, #26a69a 0%, #00695c 100%)',
+          background: 'linear-gradient(135deg, #70a288 0%, #5d8a73 100%)', // Softer gradient
           '&:hover': {
-            background: 'linear-gradient(135deg, #00695c 0%, #004d40 100%)',
+            background: 'linear-gradient(135deg, #5d8a73 0%, #4a7c59 100%)',
           },
         },
       },
@@ -158,12 +158,12 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 16,
-          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
-          border: '1px solid rgba(0, 0, 0, 0.05)',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)', // Softer shadow
+          border: '1px solid rgba(0, 0, 0, 0.03)', // Lighter border
           transition: 'all 0.3s ease',
           '&:hover': {
-            boxShadow: '0 8px 25px rgba(0, 0, 0, 0.12)',
-            transform: 'translateY(-2px)',
+            boxShadow: '0 6px 20px rgba(0, 0, 0, 0.08)', // Softer hover shadow
+            transform: 'translateY(-1px)', // Less movement
           },
         },
       },
@@ -183,10 +183,10 @@ const theme = createTheme({
           '& .MuiOutlinedInput-root': {
             borderRadius: 12,
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#1e88e5',
+              borderColor: '#5c9bd5', // Softer blue
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#1e88e5',
+              borderColor: '#5c9bd5', // Softer blue
               borderWidth: 2,
             },
           },
@@ -197,18 +197,18 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 16,
-          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)', // Softer shadow
         },
       },
     },
     MuiTableHead: {
       styleOverrides: {
         root: {
-          backgroundColor: '#f8fafb',
+          backgroundColor: '#fafbfc', // Softer background
           '& .MuiTableCell-head': {
-            fontWeight: 600,
-            color: '#2c3e50',
-            borderBottom: '2px solid #e0e0e0',
+            fontWeight: 500, // Lighter weight
+            color: '#3d4852', // Softer color
+            borderBottom: '1px solid #e5e7eb', // Lighter border
           },
         },
       },
@@ -217,10 +217,10 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '&:hover': {
-            backgroundColor: 'rgba(30, 136, 229, 0.04)',
+            backgroundColor: 'rgba(92, 155, 213, 0.03)', // Softer hover
           },
           '&:nth-of-type(even)': {
-            backgroundColor: 'rgba(248, 250, 251, 0.5)',
+            backgroundColor: 'rgba(250, 251, 252, 0.3)', // Softer striping
           },
         },
       },
@@ -232,12 +232,12 @@ const theme = createTheme({
           fontWeight: 500,
         },
         colorPrimary: {
-          backgroundColor: '#e3f2fd',
-          color: '#1565c0',
+          backgroundColor: '#e8f4fd', // Softer background
+          color: '#3a7bc8', // Softer text
         },
         colorSecondary: {
-          backgroundColor: '#e0f2f1',
-          color: '#00695c',
+          backgroundColor: '#f1f8e9', // Softer background
+          color: '#4a7c59', // Softer text
         },
       },
     },

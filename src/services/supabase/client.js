@@ -11,4 +11,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Create a single supabase client for interacting with your database
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    // Token sẽ hết hạn sau 1 giờ (3600 giây)
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+    // Thời gian token hết hạn (tính bằng giây)
+    // 3600 = 1 giờ, 1800 = 30 phút, 900 = 15 phút
+    flowType: 'implicit'
+  }
+});

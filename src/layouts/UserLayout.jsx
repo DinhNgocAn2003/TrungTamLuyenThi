@@ -477,11 +477,10 @@ function UserLayout() {
             maxWidth: '100vw', // Không vượt quá viewport
             // Thin scrollbar styles
             '&::-webkit-scrollbar': {
-              width: '6px',
+              width: '4px',
             },
             '&::-webkit-scrollbar-track': {
-              background: 'rgba(30, 136, 229, 0.1)',
-              borderRadius: '3px',
+              background: 'transparent',
             },
             '&::-webkit-scrollbar-thumb': {
               background: 'rgba(30, 136, 229, 0.3)',

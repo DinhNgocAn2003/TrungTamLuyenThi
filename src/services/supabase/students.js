@@ -6,7 +6,10 @@ export const getStudents = async () => {
   // Use admin client for admin operations to bypass RLS
   const { data, error } = await supabaseAdmin
     .from('students')
-    .select('*, user_profiles(*)');
+    .select(`
+      *,
+      user_profiles(*)
+    `);
   
   return { data, error };
 };
@@ -14,8 +17,11 @@ export const getStudents = async () => {
 export const getStudentById = async (id) => {
   const { data, error } = await supabase
     .from('students')
-    .select('*, user_profiles(*)')
-    .eq('id', id)
+    .select(`
+      *,
+      user_profiles(*)
+    `)
+    .eq('user_id', id)
     .maybeSingle(); // Sử dụng maybeSingle() thay vì single()
   
   return { data, error };
@@ -24,29 +30,28 @@ export const getStudentById = async (id) => {
 export const getStudentByUserId = async (userId) => {
   const { data, error } = await supabase
     .from('students')
-    .select('*')
+    .select(`
+      *,
+      user_profiles(*)
+    `)
     .eq('user_id', userId)
     .maybeSingle(); // Sử dụng maybeSingle() thay vì single()
   
   return { data, error };
 };
 
-export const getStudentByQrCode = async (qrCode) => {
-  const { data, error } = await supabase
-    .from('students')
-    .select('*')
-    .eq('qr_code', qrCode)
-    .maybeSingle(); // Sử dụng maybeSingle() thay vì single()
-  
-  return { data, error };
-};
+// Function này sẽ được sử dụng cho điểm danh bằng user_id
+// getStudentByUserId đã có sẵn ở trên
 
 export const createStudent = async (studentData) => {
   // Use admin client to bypass RLS
   const { data, error } = await supabaseAdmin
     .from('students')
     .insert(studentData)
-    .select();
+    .select(`
+      *,
+      user_profiles(*)
+    `);
   
   return { data, error };
 };
@@ -56,8 +61,11 @@ export const updateStudent = async (id, studentData) => {
   const { data, error } = await supabaseAdmin
     .from('students')
     .update(studentData)
-    .eq('id', id)
-    .select();
+    .eq('user_id', id)
+    .select(`
+      *,
+      user_profiles(*)
+    `);
   
   return { data, error };
 };
@@ -67,7 +75,7 @@ export const deleteStudent = async (id) => {
   const { error } = await supabaseAdmin
     .from('students')
     .delete()
-    .eq('id', id);
+    .eq('user_id', id);
   
   return { error };
 };

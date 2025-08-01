@@ -17,9 +17,10 @@ import UserLayout from './layouts/UserLayout';
 import Login from './pages/auth/Login';
 import ResetPassword from './pages/auth/ResetPassword';
 import ForgotPassword from './pages/auth/ForgotPassword';
-import AdminDashboard from './pages/admin/Dashboard';
+import Dashboard from './pages/admin/Dashboard';
 import Classes from './pages/admin/ClassManagement';
 import Students from './pages/admin/StudentManagement';
+import Teachers from './pages/admin/TeacherManagement';
 import Payments from './pages/admin/Payments';
 import Reports from './pages/admin/Reports';
 import UserManagement from './pages/admin/UserManagement';
@@ -84,10 +85,10 @@ function App() {
                       <AdminLayout />
                     }
                   >
-                    <Route index element={<Navigate to="/admin/dashboard" replace />} />
-                    <Route path="dashboard" element={<AdminDashboard />} />
-                    <Route path="classes" element={<Classes />} />
+                    <Route index path="dashboard" element={<Dashboard />} />
                     <Route path="students" element={<Students />} />
+                    <Route path="teachers" element={<Teachers />} />
+                    <Route path="classes" element={<Classes />} />
                     <Route path="payments" element={<Payments />} />
                     <Route path="reports" element={<Reports />} />
                     <Route path="users" element={<UserManagement />} />

@@ -42,31 +42,9 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 
-// Dữ liệu mẫu
-const mockClasses = [
-  { id: 1, name: 'Toán 10A1', students: 32 },
-  { id: 2, name: 'Toán 11B2', students: 28 },
-  { id: 3, name: 'Toán 12C1', students: 25 }
-];
-
-const mockStudents = {
-  1: [
-    { id: 1, name: 'Nguyễn Văn A', student_id: 'HS001', present: true },
-    { id: 2, name: 'Trần Thị B', student_id: 'HS002', present: true },
-    { id: 3, name: 'Lê Văn C', student_id: 'HS003', present: false },
-    { id: 4, name: 'Phạm Thị D', student_id: 'HS004', present: true },
-    { id: 5, name: 'Hoàng Văn E', student_id: 'HS005', present: true }
-  ],
-  2: [
-    { id: 6, name: 'Vũ Thị F', student_id: 'HS006', present: true },
-    { id: 7, name: 'Đặng Văn G', student_id: 'HS007', present: false },
-    { id: 8, name: 'Bùi Thị H', student_id: 'HS008', present: true }
-  ],
-  3: [
-    { id: 9, name: 'Cao Văn I', student_id: 'HS009', present: true },
-    { id: 10, name: 'Lý Thị K', student_id: 'HS010', present: true }
-  ]
-};
+// Data will be loaded from API
+const mockClasses = [];
+const mockStudents = {};
 
 function TeacherAttendance() {
   const [selectedClass, setSelectedClass] = useState('');

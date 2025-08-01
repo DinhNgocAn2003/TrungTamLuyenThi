@@ -54,17 +54,19 @@ export const AuthProvider = ({ children }) => {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
         
-        // Ngay lập tức set user nếu có session, load profile sau
         if (session?.user) {
+          console.log('🔍 Session found, setting user immediately...');
+          // Set user ngay lập tức để login nhanh
           setAuthState({
             user: session.user,
-            userProfile: null, // Load sau
+            userProfile: null,
             loading: false
           });
           
-          // Load profile trong background
+          // Load profile trong background (không block UI)
           refreshUserProfile(session.user.id);
         } else {
+          console.log('❌ No session found');
           setAuthState({
             user: null,
             userProfile: null,
@@ -77,24 +79,56 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Timeout ngắn hơn (1 giây)
+    // Timeout rất ngắn (300ms) để tránh loading lâu
     timeoutId = setTimeout(() => {
       setAuthState(prev => ({ ...prev, loading: false }));
-    }, 1000);
+    }, 300);
 
     getSession();
 
     // Lắng nghe thay đổi auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // console.log('🔐 Auth state changed:', event, session?.user?.id);
+      
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('🔄 Token refreshed successfully');
+      } else if (event === 'SIGNED_OUT' || event === 'TOKEN_EXPIRED') {
+        console.log('🚪 User signed out or token expired');
+        setAuthState({
+          user: null,
+          userProfile: null,
+          loading: false
+        });
+        // Redirect to login if token expired
+        if (event === 'TOKEN_EXPIRED') {
+          window.location.href = '/login';
+        }
+        return;
+      }
+      
       if (session?.user) {
+        // Check token expiration
+        const now = Math.floor(Date.now() / 1000);
+        const expiresAt = session.expires_at;
+        
+        if (expiresAt && now >= expiresAt) {
+          console.log('⏰ Token expired, signing out...');
+          await signOut();
+          return;
+        }
+        
+        console.log('👤 Setting user immediately, loading profile in background...');
+        // Set user ngay lập tức
         setAuthState({
           user: session.user,
           userProfile: null,
           loading: false
         });
-        // Load profile sau
+        
+        // Load profile trong background
         refreshUserProfile(session.user.id);
       } else {
+        console.log('❌ No session in auth state change');
         setAuthState({
           user: null,
           userProfile: null,
@@ -108,6 +142,35 @@ export const AuthProvider = ({ children }) => {
       subscription.unsubscribe();
     };
   }, [refreshUserProfile]);
+
+  // Check token expiration định kỳ (mỗi 5 phút)
+  useEffect(() => {
+    const checkTokenExpiration = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const now = Math.floor(Date.now() / 1000);
+        const expiresAt = session.expires_at;
+        
+        // Nếu token sắp hết hạn trong 5 phút tới
+        if (expiresAt && (expiresAt - now) <= 300) {
+          console.log('⚠️ Token sắp hết hạn, đang refresh...');
+          const { error } = await supabase.auth.refreshSession();
+          if (error) {
+            console.error('❌ Không thể refresh token:', error);
+            await signOut();
+          }
+        }
+      }
+    };
+
+    // Check ngay lập tức
+    checkTokenExpiration();
+    
+    // Check mỗi 5 phút
+    const interval = setInterval(checkTokenExpiration, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const signIn = async (emailOrPhone, password) => {
     try {

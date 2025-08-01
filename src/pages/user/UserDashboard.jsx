@@ -186,12 +186,12 @@ const fetchStudentData = async () => {
   return (
     <Box sx={{ 
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: 'linear-gradient(135deg, #a8b8e6 0%, #c8a2c8 100%)', // Softer gradient
       p: 1
     }}>
       {/* Header với gradient */}
       <Box sx={{ 
-        background: 'linear-gradient(135deg, #ff6b6b 0%, #feca57 100%)',
+        background: 'linear-gradient(135deg, #81c784 0%, #aed581 100%)', // Softer green gradient
         borderRadius: 3,
         p: 4,
         mb: 4,
@@ -251,11 +251,11 @@ const fetchStudentData = async () => {
       <Grid container spacing={3} mb={4}>
         <Grid item xs={12} sm={6} md={3}>
           <Card sx={{ 
-            background: 'linear-gradient(135deg, #74b9ff 0%, #0984e3 100%)',
+            background: 'linear-gradient(135deg, #90caf9 0%, #64b5f6 100%)', // Softer blue
             color: 'white',
             borderRadius: 3,
             transition: 'transform 0.3s',
-            '&:hover': { transform: 'translateY(-5px)' }
+            '&:hover': { transform: 'translateY(-3px)' } // Less movement
           }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <SchoolIcon sx={{ fontSize: 48, mb: 2, opacity: 0.9 }} />
@@ -271,11 +271,11 @@ const fetchStudentData = async () => {
         
         <Grid item xs={12} sm={6} md={3}>
           <Card sx={{ 
-            background: 'linear-gradient(135deg, #fd79a8 0%, #e84393 100%)',
+            background: 'linear-gradient(135deg, #f48fb1 0%, #e91e63 100%)', // Softer pink
             color: 'white',
             borderRadius: 3,
             transition: 'transform 0.3s',
-            '&:hover': { transform: 'translateY(-5px)' }
+            '&:hover': { transform: 'translateY(-3px)' } // Less movement
           }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <EventNoteIcon sx={{ fontSize: 48, mb: 2, opacity: 0.9 }} />
@@ -291,11 +291,11 @@ const fetchStudentData = async () => {
         
         <Grid item xs={12} sm={6} md={3}>
           <Card sx={{ 
-            background: 'linear-gradient(135deg, #00b894 0%, #00a085 100%)',
+            background: 'linear-gradient(135deg, #81c784 0%, #66bb6a 100%)', // Softer green
             color: 'white',
             borderRadius: 3,
             transition: 'transform 0.3s',
-            '&:hover': { transform: 'translateY(-5px)' }
+            '&:hover': { transform: 'translateY(-3px)' } // Less movement
           }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <PaymentIcon sx={{ fontSize: 48, mb: 2, opacity: 0.9 }} />
@@ -311,11 +311,11 @@ const fetchStudentData = async () => {
         
         <Grid item xs={12} sm={6} md={3}>
           <Card sx={{ 
-            background: 'linear-gradient(135deg, #fdcb6e 0%, #e17055 100%)',
+            background: 'linear-gradient(135deg, #ffb74d 0%, #ff9800 100%)', // Softer orange
             color: 'white',
             borderRadius: 3,
             transition: 'transform 0.3s',
-            '&:hover': { transform: 'translateY(-5px)' }
+            '&:hover': { transform: 'translateY(-3px)' } // Less movement
           }}>
             <CardContent sx={{ textAlign: 'center', p: 3 }}>
               <TodayIcon sx={{ fontSize: 48, mb: 2, opacity: 0.9 }} />
@@ -421,16 +421,16 @@ const fetchStudentData = async () => {
                     onClick={handleToggleQRCode}
                     sx={{ 
                       borderRadius: 2,
-                      background: showQRCode ? 'transparent' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      background: showQRCode ? 'transparent' : 'linear-gradient(135deg, #5c9bd5 0%, #70a288 100%)', // Softer gradient
                       '&:hover': {
-                        background: showQRCode ? 'rgba(102,126,234,0.1)' : 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)'
+                        background: showQRCode ? 'rgba(92,155,213,0.1)' : 'linear-gradient(135deg, #4a90d9 0%, #5d8a73 100%)' // Softer hover
                       }
                     }}
                   >
                     {showQRCode ? "🙈 Ẩn mã QR" : "📱 Hiện mã QR"}
                   </Button>
                   
-                  {showQRCode && student?.qr_code && (
+                  {showQRCode && student?.user_id && (
                     <Box sx={{ 
                       mt: 2, 
                       p: 2,
@@ -440,7 +440,7 @@ const fetchStudentData = async () => {
                       boxShadow: '0 4px 12px rgba(0,0,0,0.1)' 
                     }}>
                       <QRCode 
-                        value={student.qr_code} 
+                        value={student.user_id} 
                         size={150}
                         level="H"
                         includeMargin
@@ -490,12 +490,12 @@ const fetchStudentData = async () => {
                         py: 1,
                         borderRadius: 2,
                         mb: 1,
-                        bgcolor: index % 2 === 0 ? 'rgba(102,126,234,0.05)' : 'rgba(253,121,168,0.05)',
+                        bgcolor: index % 2 === 0 ? 'rgba(92,155,213,0.05)' : 'rgba(244,143,177,0.05)',
                         border: '1px solid',
-                        borderColor: index % 2 === 0 ? 'rgba(102,126,234,0.1)' : 'rgba(253,121,168,0.1)',
+                        borderColor: index % 2 === 0 ? 'rgba(92,155,213,0.1)' : 'rgba(244,143,177,0.1)',
                         transition: 'all 0.3s',
                         '&:hover': {
-                          bgcolor: index % 2 === 0 ? 'rgba(102,126,234,0.1)' : 'rgba(253,121,168,0.1)',
+                          bgcolor: index % 2 === 0 ? 'rgba(92,155,213,0.1)' : 'rgba(244,143,177,0.1)',
                           transform: 'translateX(5px)'
                         }
                       }}
@@ -584,10 +584,10 @@ const fetchStudentData = async () => {
                   startIcon={<ArrowForwardIcon />}
                   sx={{ 
                     borderRadius: 2,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #5c9bd5 0%, #70a288 100%)', // Softer gradient
                     '&:hover': {
-                      background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
-                      transform: 'translateY(-2px)'
+                      background: 'linear-gradient(135deg, #4a90d9 0%, #5d8a73 100%)',
+                      transform: 'translateY(-1px)' // Less movement
                     }
                   }}
                 >
@@ -776,10 +776,10 @@ const fetchStudentData = async () => {
                 startIcon={<PaymentIcon />}
                 sx={{ 
                   borderRadius: 2,
-                  background: 'linear-gradient(135deg, #00b894 0%, #00a085 100%)',
+                  background: 'linear-gradient(135deg, #81c784 0%, #66bb6a 100%)', // Softer green
                   '&:hover': {
-                    background: 'linear-gradient(135deg, #00a085 0%, #009068 100%)',
-                    transform: 'translateY(-2px)'
+                    background: 'linear-gradient(135deg, #66bb6a 0%, #4caf50 100%)',
+                    transform: 'translateY(-1px)' // Less movement
                   }
                 }}
               >

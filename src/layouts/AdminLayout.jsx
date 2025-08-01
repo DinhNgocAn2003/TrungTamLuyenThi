@@ -20,7 +20,6 @@ import {
   Tooltip,
   useMediaQuery,
   useTheme,
-  Badge,
   Paper,
   Chip,
   alpha
@@ -38,7 +37,6 @@ import {
   Settings as SettingsIcon,
   ChevronLeft as ChevronLeftIcon,
   AdminPanelSettings as AdminIcon,
-  Notifications as NotificationsIcon,
   SupervisorAccount as SupervisorIcon
 } from '@mui/icons-material';
 
@@ -70,11 +68,18 @@ const menuItems = [
     description: 'Thông tin và quản lý học sinh'
   },
   { 
+    title: 'Quản lý giáo viên', 
+    path: '/admin/teachers', 
+    icon: <SupervisorIcon />, 
+    color: '#e91e63',
+    description: 'Thông tin và quản lý giáo viên'
+  },
+  { 
     title: 'Quản lý người dùng', 
     path: '/admin/users', 
-    icon: <SupervisorIcon />, 
+    icon: <AdminIcon />, 
     color: '#9c27b0',
-    description: 'Quản lý tài khoản giáo viên và admin'
+    description: 'Quản lý tài khoản admin và hệ thống'
   },
   { 
     title: 'Điểm danh', 
@@ -215,6 +220,7 @@ function AdminLayout() {
               onClick={handleDrawerToggle}
               sx={{ 
                 mr: 2,
+                ml:1,
                 background: 'rgba(255, 255, 255, 0.15)', // Tăng độ trong suốt cho nút
                 '&:hover': {
                   background: 'rgba(255, 255, 255, 0.25)', // Hover sáng hơn
@@ -240,7 +246,7 @@ function AdminLayout() {
                 flexShrink: 0 // Không cho logo bị shrink
               }}
             />
-            <AdminIcon sx={{ mr: 1.5, fontSize: { xs: 24, md: 32 }, color: '#fff', flexShrink: 0 }} />
+            {/* <AdminIcon sx={{ mr: 1.5, fontSize: { xs: 24, md: 32 }, color: '#fff', flexShrink: 0 }} /> */}
             <Box sx={{ overflow: 'hidden', minWidth: 0 }}>
               <Typography 
                 variant="h5" 
@@ -280,26 +286,6 @@ function AdminLayout() {
             gap: { xs: 0.5, md: 1 }, // Giảm gap trên mobile
             flexShrink: 0 // Không cho shrink
           }}>
-            <Tooltip title="Thông báo hệ thống">
-              <IconButton
-                color="inherit"
-                sx={{ 
-                  background: 'rgba(255, 255, 255, 0.15)', // Tăng độ trong suốt
-                  '&:hover': { 
-                    background: 'rgba(255, 255, 255, 0.25)', // Hover sáng hơn
-                    transform: 'scale(1.05)'
-                  },
-                  transition: 'all 0.3s ease',
-                  width: { xs: 36, md: 44 }, // Giảm size trên mobile
-                  height: { xs: 36, md: 44 }
-                }}
-              >
-                <Badge badgeContent={5} color="error">
-                  <NotificationsIcon sx={{ fontSize: { xs: 18, md: 24 } }} />
-                </Badge>
-              </IconButton>
-            </Tooltip>
-            
             <Tooltip title="Tài khoản quản trị">
               <IconButton 
                 onClick={handleOpenUserMenu} 
@@ -421,6 +407,20 @@ function AdminLayout() {
             boxShadow: '0 12px 40px rgba(103, 126, 234, 0.2)', // Shadow tím
             overflow: 'hidden auto', // Chỉ scroll theo chiều dọc
             maxWidth: '100vw', // Không vượt quá viewport
+            // Custom thin scrollbar
+            '&::-webkit-scrollbar': {
+              width: '4px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: 'transparent',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '2px',
+              '&:hover': {
+                background: 'rgba(255, 255, 255, 0.3)',
+              },
+            },
           },
         }}
       >
@@ -459,7 +459,7 @@ function AdminLayout() {
                 mt: 0.5
               }}
             >
-              Trung tâm luyện thi 🎓
+              Trung tâm DNA 🎓
             </Typography>
           </Paper>
         </Box>

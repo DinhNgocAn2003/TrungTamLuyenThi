@@ -38,43 +38,41 @@ function Login() {
   
   // Nếu đã đăng nhập, chuyển hướng dựa vào role
   useEffect(() => {
-    if (user && !loading) {
-      // Nếu chưa có userProfile và role không có trong metadata, chờ thêm
-      if (!user.user_metadata?.role && !userProfile) {
-        console.log('⏳ Waiting for userProfile to load...');
+    // Redirect ngay khi có user và role (không cần đợi userProfile)
+    if (!loading && user) {
+      console.log('=== REDIRECT CHECK ===');
+      console.log('User ID:', user.id);
+      console.log('User metadata role:', user.user_metadata?.role);
+      console.log('UserProfile role:', userProfile?.role);
+      console.log('Loading status:', loading);
+      
+      // Lấy role từ metadata trước, userProfile sau (để nhanh hơn)
+      const role = (user.user_metadata?.role || userProfile?.role)?.toLowerCase();
+      console.log('Final role for redirect:', role);
+      
+      if (!role) {
+        console.log('❌ No role found, staying on login');
         return;
       }
       
-      // Debug để xem role
-      console.log('=== REDIRECT DEBUG ===');
-      console.log('User:', user);
-      console.log('User metadata:', user.user_metadata);
-      console.log('UserProfile:', userProfile);
-      
-      // Kiểm tra role từ nhiều nguồn
-      const roleFromMetadata = user.user_metadata?.role;
-      const roleFromProfile = userProfile?.role;
-      console.log('Role from metadata:', roleFromMetadata);
-      console.log('Role from profile:', roleFromProfile);
-      
-      // Normalize role (chuyển về lowercase để so sánh)
-      const role = (roleFromMetadata || roleFromProfile || 'student').toLowerCase();
-      console.log('Final role (lowercase):', role);
-      console.log('====================');
-      
-      // Thêm delay nhỏ để đảm bảo component đã mount
-      setTimeout(() => {
-        if (role === 'admin') {
-          console.log('✅ Redirecting to ADMIN dashboard');
-          navigate('/admin/dashboard', { replace: true });
-        } else if (role === 'teacher') {
-          console.log('✅ Redirecting to TEACHER dashboard');
-          navigate('/teacher/dashboard', { replace: true });
-        } else {
-          console.log('✅ Redirecting to STUDENT dashboard');
-          navigate('/student/dashboard', { replace: true });
-        }
-      }, 100);
+      // Redirect ngay lập tức không cần delay
+      if (role === 'admin') {
+        console.log('✅ Redirecting to ADMIN dashboard');
+        navigate('/admin/dashboard', { replace: true });
+      } else if (role === 'teacher') {
+        console.log('✅ Redirecting to TEACHER dashboard');
+        navigate('/teacher/dashboard', { replace: true });
+      } else if (role === 'student') {
+        console.log('✅ Redirecting to STUDENT dashboard');
+        navigate('/student/dashboard', { replace: true });
+      } else {
+        console.log('❌ Unknown role:', role);
+      }
+    } else {
+      console.log('⏳ Waiting for auth:', { 
+        loading, 
+        hasUser: !!user
+      });
     }
   }, [user, userProfile, loading, navigate]);
   
@@ -86,24 +84,28 @@ function Login() {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+        background: 'linear-gradient(135deg, #a8b8e6 0%, #c8a2c8 100%)' // Softer gradient
       }}>
         <CircularProgress size={60} sx={{ color: 'white' }} />
       </Box>
     );
   }
 
-  // Nếu đã đăng nhập nhưng chưa redirect, hiển thị loading
-  if (user) {
+  // Nếu đang loading hoặc đã có user với role thì hiển thị loading
+  if (loading || (user && user.user_metadata?.role)) {
     return (
       <Box sx={{ 
         minHeight: '100vh', 
         display: 'flex', 
+        flexDirection: 'column',
         alignItems: 'center', 
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+        background: 'linear-gradient(135deg, #a8b8e6 0%, #c8a2c8 100%)' // Softer gradient
       }}>
-        <CircularProgress size={60} sx={{ color: 'white' }} />
+        <CircularProgress size={60} sx={{ color: 'white', mb: 2 }} />
+        <Typography variant="h6" sx={{ color: 'white', textAlign: 'center' }}>
+          {loading ? 'Đang kiểm tra đăng nhập...' : 'Đang chuyển hướng...'}
+        </Typography>
       </Box>
     );
   }
@@ -173,7 +175,7 @@ function Login() {
   return (
     <Box sx={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      background: 'linear-gradient(135deg, #a8b8e6 0%, #c8a2c8 100%)', // Softer gradient
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -190,7 +192,7 @@ function Login() {
         }}>
           {/* Header */}
           <Box sx={{
-            background: 'linear-gradient(135deg, #ff6b6b 0%, #feca57 100%)',
+            background: 'linear-gradient(135deg, #81c784 0%, #aed581 100%)', // Softer green gradient
             p: 4,
             textAlign: 'center',
             color: 'white',
@@ -325,15 +327,15 @@ function Login() {
                       mt: 2,
                       py: 1.5,
                       borderRadius: 3,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      background: 'linear-gradient(135deg, #5c9bd5 0%, #70a288 100%)', // Softer button gradient
                       fontSize: '1.1rem',
                       fontWeight: 'bold',
                       textTransform: 'none',
-                      boxShadow: '0 8px 16px rgba(102,126,234,0.3)',
+                      boxShadow: '0 6px 12px rgba(92,155,213,0.2)', // Softer shadow
                       '&:hover': {
-                        background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
-                        transform: 'translateY(-2px)',
-                        boxShadow: '0 12px 20px rgba(102,126,234,0.4)'
+                        background: 'linear-gradient(135deg, #4a90d9 0%, #5d8a73 100%)',
+                        transform: 'translateY(-1px)', // Less movement
+                        boxShadow: '0 8px 16px rgba(92,155,213,0.3)' // Softer shadow
                       },
                       '&.Mui-disabled': {
                         background: 'linear-gradient(135deg, #ccc 0%, #999 100%)'

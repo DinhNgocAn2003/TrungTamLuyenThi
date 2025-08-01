@@ -1,5 +1,6 @@
 export * from './students';
 export * from './classes';
+export * from './teachers';
 export * from './attendance';
 export * from './payments';
 export * from './grades';

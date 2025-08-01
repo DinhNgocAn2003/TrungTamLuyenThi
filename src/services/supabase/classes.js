@@ -115,16 +115,6 @@ export const getSubjects = async () => {
   return { data, error };
 };
 
-export const getTeachers = async () => {
-  // Use admin client for admin operations
-  const { data, error } = await supabaseAdmin
-    .from('teachers')
-    .select('*')
-    .order('full_name');
-  
-  return { data, error };
-};
-
 export const assignTeacher = async (classId, teacherId, isMain = false) => {
   // Use admin client to bypass RLS
   const { data, error } = await supabaseAdmin

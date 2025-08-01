@@ -51,7 +51,7 @@ import {
   getAttendanceByDate,
   markAttendance,
   updateAttendance,
-  getStudentByQrCode,
+  getStudentByUserId,
   sendZaloNotification
 } from '../../services/supabase/database';
 import { useLoading } from '../../contexts/LoadingContext';
@@ -315,13 +315,13 @@ const fetchClasses = async () => {
     setScanning(false);
     
     try {
-      // Tìm học sinh với mã QR
-      const { data: student, error } = await getStudentByQrCode(qrCode);
+      // Tìm học sinh với user_id (từ mã QR)
+      const { data: student, error } = await getStudentByUserId(qrCode);
       
       if (error) throw error;
       
       if (!student) {
-        showNotification('Không tìm thấy học sinh với mã QR này', 'error');
+        showNotification('Không tìm thấy học sinh với mã này', 'error');
         setScanning(true);
         return;
       }

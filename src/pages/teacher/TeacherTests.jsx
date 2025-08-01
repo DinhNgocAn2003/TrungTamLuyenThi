@@ -43,57 +43,9 @@ import {
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
 
-// Dữ liệu mẫu
-const mockClasses = [
-  { id: 1, name: 'Toán 10A1', students: 32 },
-  { id: 2, name: 'Toán 11B2', students: 28 },
-  { id: 3, name: 'Toán 12C1', students: 25 }
-];
-
-const mockTests = [
-  {
-    id: 1,
-    name: 'Kiểm tra 15 phút - Chương 2',
-    classId: 1,
-    className: 'Toán 10A1',
-    date: '2025-07-30',
-    time: '08:00',
-    duration: 15,
-    coefficient: 1,
-    description: 'Kiểm tra nắm vững kiến thức chương 2: Hàm số bậc nhất',
-    status: 'scheduled', // scheduled, completed, cancelled
-    createdDate: '2025-07-25',
-    notificationSent: true
-  },
-  {
-    id: 2,
-    name: 'Kiểm tra 1 tiết - Giới hạn',
-    classId: 2,
-    className: 'Toán 11B2',
-    date: '2025-08-02',
-    time: '10:00',
-    duration: 45,
-    coefficient: 2,
-    description: 'Kiểm tra chương Giới hạn hàm số và dãy số',
-    status: 'scheduled',
-    createdDate: '2025-07-24',
-    notificationSent: false
-  },
-  {
-    id: 3,
-    name: 'Kiểm tra học kỳ 1',
-    classId: 3,
-    className: 'Toán 12C1',
-    date: '2025-08-15',
-    time: '14:00',
-    duration: 90,
-    coefficient: 3,
-    description: 'Kiểm tra tổng hợp kiến thức học kỳ 1',
-    status: 'scheduled',
-    createdDate: '2025-07-20',
-    notificationSent: true
-  }
-];
+// Data will be loaded from API
+const mockClasses = [];
+const mockTests = [];
 
 function TeacherTests() {
   const [tests, setTests] = useState(mockTests);

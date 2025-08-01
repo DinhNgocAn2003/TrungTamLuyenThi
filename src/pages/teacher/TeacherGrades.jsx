@@ -49,80 +49,11 @@ import {
   Class as ClassIcon
 } from '@mui/icons-material';
 
-// Dữ liệu mẫu
-const mockClasses = [
-  { id: 1, name: 'Toán 10A1', students: 32 },
-  { id: 2, name: 'Toán 11B2', students: 28 },
-  { id: 3, name: 'Toán 12C1', students: 25 }
-];
-
-const mockTests = [
-  {
-    id: 1,
-    name: 'Kiểm tra 15 phút - Chương 2',
-    classId: 1,
-    className: 'Toán 10A1',
-    date: '2025-07-25',
-    coefficient: 1,
-    status: 'completed'
-  },
-  {
-    id: 2,
-    name: 'Kiểm tra 1 tiết - Giới hạn',
-    classId: 2,
-    className: 'Toán 11B2',
-    date: '2025-07-20',
-    coefficient: 2,
-    status: 'completed'
-  },
-  {
-    id: 3,
-    name: 'Kiểm tra học kỳ 1',
-    classId: 3,
-    className: 'Toán 12C1',
-    date: '2025-07-15',
-    coefficient: 3,
-    status: 'completed'
-  }
-];
-
-const mockGrades = {
-  1: [
-    { studentId: 1, studentName: 'Nguyễn Văn A', score: 8.5 },
-    { studentId: 2, studentName: 'Trần Thị B', score: 7.0 },
-    { studentId: 3, studentName: 'Lê Văn C', score: 9.0 },
-    { studentId: 4, studentName: 'Phạm Thị D', score: 6.5 },
-    { studentId: 5, studentName: 'Hoàng Văn E', score: 8.0 }
-  ],
-  2: [
-    { studentId: 6, studentName: 'Vũ Thị F', score: 7.5 },
-    { studentId: 7, studentName: 'Đặng Văn G', score: 8.5 },
-    { studentId: 8, studentName: 'Bùi Thị H', score: 9.5 }
-  ],
-  3: [
-    { studentId: 9, studentName: 'Cao Văn I', score: 8.0 },
-    { studentId: 10, studentName: 'Lý Thị K', score: 9.0 }
-  ]
-};
-
-const mockStudents = {
-  1: [
-    { id: 1, name: 'Nguyễn Văn A', student_id: 'HS001' },
-    { id: 2, name: 'Trần Thị B', student_id: 'HS002' },
-    { id: 3, name: 'Lê Văn C', student_id: 'HS003' },
-    { id: 4, name: 'Phạm Thị D', student_id: 'HS004' },
-    { id: 5, name: 'Hoàng Văn E', student_id: 'HS005' }
-  ],
-  2: [
-    { id: 6, name: 'Vũ Thị F', student_id: 'HS006' },
-    { id: 7, name: 'Đặng Văn G', student_id: 'HS007' },
-    { id: 8, name: 'Bùi Thị H', student_id: 'HS008' }
-  ],
-  3: [
-    { id: 9, name: 'Cao Văn I', student_id: 'HS009' },
-    { id: 10, name: 'Lý Thị K', student_id: 'HS010' }
-  ]
-};
+// Data will be loaded from API
+const mockClasses = [];
+const mockTests = [];
+const mockGrades = {};
+const mockStudents = {};
 
 function TeacherGrades() {
   const [selectedClass, setSelectedClass] = useState('');

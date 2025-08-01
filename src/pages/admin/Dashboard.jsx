@@ -6,211 +6,149 @@ import {
   CardContent,
   Typography,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
-  Button,
-  Avatar,
   List,
   ListItem,
   ListItemText,
-  ListItemAvatar,
-  Divider,
-  Alert
+  ListItemIcon,
+  Chip
 } from '@mui/material';
 import {
   TrendingUp,
-  TrendingDown,
-  People,
-  Class,
-  MonetizationOn,
-  EventNote,
-  Warning,
-  CheckCircle,
   School,
-  Payment
+  Person,
+  Payment,
+  Event,
+  Assignment
 } from '@mui/icons-material';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import dayjs from 'dayjs';
-
-import { useAuth } from '../../contexts/AuthContext';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { getStudents, getClasses, getPayments, getEnrollments } from '../../services/supabase/database';
 import { useLoading } from '../../contexts/LoadingContext';
-import { useNotification } from '../../contexts/NotificationContext';
-import {
-  getStudents,
-  getClasses,
-  getPayments,
-  getAttendance,
-  getUnpaidStudents,
-  getAbsentStudents,
-  getEnrollments
-} from '../../services/supabase/database';
 import PageHeader from '../../components/common/PageHeader';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-
 function Dashboard() {
-  const { user } = useAuth();
   const { setLoading } = useLoading();
-  const { showNotification } = useNotification();
-  
   const [stats, setStats] = useState({
     totalStudents: 0,
     totalClasses: 0,
     totalRevenue: 0,
-    attendanceRate: 0,
-    unpaidCount: 0,
-    absentCount: 0
+    activeEnrollments: 0
   });
-  
   const [recentActivities, setRecentActivities] = useState([]);
   const [chartData, setChartData] = useState([]);
-  const [unpaidStudents, setUnpaidStudents] = useState([]);
-  const [absentStudents, setAbsentStudents] = useState([]);
-  const [recentPayments, setRecentPayments] = useState([]);
-  
+
   useEffect(() => {
     fetchDashboardData();
   }, []);
-  
+
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      // Lấy dữ liệu cơ bản
-      const [
-        { data: studentsData, error: studentsError },
-        { data: classesData, error: classesError },
-        { data: paymentsData, error: paymentsError },
-        { data: attendanceData, error: attendanceError },
-        { data: enrollmentsData, error: enrollmentsError }
-      ] = await Promise.all([
+      // Fetch all required data
+      const [studentsRes, classesRes, paymentsRes, enrollmentsRes] = await Promise.all([
         getStudents(),
         getClasses(),
         getPayments(),
-        getAttendance(),
         getEnrollments()
       ]);
-      
-      if (studentsError) throw studentsError;
-      if (classesError) throw classesError;
-      if (paymentsError) throw paymentsError;
-      if (attendanceError) throw attendanceError;
-      if (enrollmentsError) throw enrollmentsError;
-      
-      // Tính toán thống kê
-      const totalStudents = studentsData?.length || 0;
-      const totalClasses = classesData?.length || 0;
-      const activeClasses = classesData?.filter(c => c.is_active).length || 0;
-      
-      // Tính tổng doanh thu
-      const totalRevenue = paymentsData
-        ?.filter(p => p.status === 'completed')
-        .reduce((sum, p) => sum + p.amount, 0) || 0;
-      
-      // Tính tỷ lệ điểm danh
-      const totalAttendance = attendanceData?.length || 0;
-      const presentCount = attendanceData?.filter(a => a.status).length || 0;
-      const attendanceRate = totalAttendance > 0 ? (presentCount / totalAttendance * 100).toFixed(1) : 0;
-      
-      // Lấy dữ liệu học sinh chưa đóng tiền và vắng nhiều
-      const { data: unpaidData } = await getUnpaidStudents();
-      const { data: absentData } = await getAbsentStudents(3);
-      
+
+      // Calculate statistics
+      const totalStudents = studentsRes.data?.length || 0;
+      const totalClasses = classesRes.data?.length || 0;
+      const totalRevenue = paymentsRes.data?.reduce((sum, payment) => 
+        payment.status === 'completed' ? sum + payment.amount : sum, 0) || 0;
+      const activeEnrollments = enrollmentsRes.data?.filter(e => e.status === 'active').length || 0;
+
       setStats({
         totalStudents,
         totalClasses,
-        activeClasses,
         totalRevenue,
-        attendanceRate,
-        unpaidCount: unpaidData?.length || 0,
-        absentCount: absentData?.length || 0
+        activeEnrollments
       });
-      
-      setUnpaidStudents(unpaidData?.slice(0, 5) || []);
-      setAbsentStudents(absentData?.slice(0, 5) || []);
-      
-      // Thanh toán gần đây
-      const recentPayments = paymentsData
-        ?.sort((a, b) => dayjs(b.payment_date).diff(dayjs(a.payment_date)))
-        .slice(0, 5) || [];
-      
-      setRecentPayments(recentPayments);
-      
-      // Dữ liệu cho biểu đồ
-      const classStats = classesData?.reduce((acc, c) => {
-        const subject = c.subject?.name || 'Khác';
-        acc[subject] = (acc[subject] || 0) + 1;
-        return acc;
-      }, {});
-      
-      const pieData = Object.entries(classStats || {}).map(([name, value]) => ({
-        name,
-        value
-      }));
-      
-      setChartData(pieData);
-      
-      // Hoạt động gần đây
-      const activities = [
-        ...recentPayments.map(p => ({
-          type: 'payment',
-          description: `${p.students?.full_name} đã thanh toán ${p.amount.toLocaleString('vi-VN')} VNĐ`,
-          time: dayjs(p.payment_date).fromNow(),
-          icon: <Payment color="success" />
-        })),
-        ...enrollmentsData?.slice(0, 3).map(e => ({
-          type: 'enrollment',
-          description: `${e.students?.full_name} đã đăng ký lớp ${e.classes?.name}`,
-          time: dayjs(e.enrolled_at).fromNow(),
-          icon: <School color="primary" />
-        }))
-      ].sort((a, b) => dayjs(b.time).diff(dayjs(a.time))).slice(0, 8);
-      
+
+      // Prepare chart data (last 6 months revenue)
+      const monthlyRevenue = generateMonthlyRevenue(paymentsRes.data || []);
+      setChartData(monthlyRevenue);
+
+      // Recent activities
+      const activities = generateRecentActivities(enrollmentsRes.data || [], paymentsRes.data || []);
       setRecentActivities(activities);
-      
+
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      showNotification('Lỗi khi tải dữ liệu dashboard: ' + error.message, 'error');
     } finally {
       setLoading(false);
     }
   };
-  
-  const StatCard = ({ title, value, subtitle, icon, color = 'primary', trend }) => (
+
+  const generateMonthlyRevenue = (payments) => {
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const monthYear = `${date.getMonth() + 1}/${date.getFullYear()}`;
+      
+      const monthRevenue = payments
+        .filter(p => {
+          const paymentDate = new Date(p.payment_date);
+          return paymentDate.getMonth() === date.getMonth() && 
+                 paymentDate.getFullYear() === date.getFullYear() &&
+                 p.status === 'completed';
+        })
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      months.push({
+        month: monthYear,
+        revenue: monthRevenue
+      });
+    }
+    return months;
+  };
+
+  const generateRecentActivities = (enrollments, payments) => {
+    const activities = [];
+    
+    // Recent enrollments
+    enrollments.slice(0, 5).forEach(enrollment => {
+      activities.push({
+        type: 'enrollment',
+        message: `${enrollment.students?.full_name || 'N/A'} đăng ký lớp ${enrollment.classes?.name || 'N/A'}`,
+        time: enrollment.enrolled_at,
+        icon: <School />
+      });
+    });
+
+    // Recent payments
+    payments.slice(0, 5).forEach(payment => {
+      activities.push({
+        type: 'payment',
+        message: `Thanh toán ${payment.amount.toLocaleString('vi-VN')} VNĐ cho lớp ${payment.classes?.name || 'N/A'}`,
+        time: payment.payment_date,
+        icon: <Payment />
+      });
+    });
+
+    return activities.sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
+  };
+
+  const StatCard = ({ title, value, icon, color = 'primary' }) => (
     <Card>
       <CardContent>
-        <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+        <Box display="flex" alignItems="center" justifyContent="space-between">
           <Box>
-            <Typography color="text.secondary" gutterBottom variant="h6">
+            <Typography color="textSecondary" gutterBottom variant="body2">
               {title}
             </Typography>
-            <Typography variant="h4" component="div">
-              {value}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {subtitle}
+            <Typography variant="h4" component="h2">
+              {typeof value === 'number' && title.includes('Doanh thu') 
+                ? `${value.toLocaleString('vi-VN')} VNĐ`
+                : value.toLocaleString('vi-VN')
+              }
             </Typography>
           </Box>
-          <Avatar sx={{ bgcolor: `${color}.light` }}>
+          <Box color={`${color}.main`}>
             {icon}
-          </Avatar>
-        </Box>
-        {trend && (
-          <Box display="flex" alignItems="center" mt={1}>
-            {trend > 0 ? (
-              <TrendingUp color="success" fontSize="small" />
-            ) : (
-              <TrendingDown color="error" fontSize="small" />
-            )}
-            <Typography variant="body2" color={trend > 0 ? 'success.main' : 'error.main'} sx={{ ml: 0.5 }}>
-              {Math.abs(trend)}%
-            </Typography>
           </Box>
-        )}
+        </Box>
       </CardContent>
     </Card>
   );
@@ -218,218 +156,84 @@ function Dashboard() {
   return (
     <Box>
       <PageHeader 
-        title={`Chào mừng, ${user?.user_metadata?.full_name || 'Admin'}!`} 
+        title="Dashboard" 
         breadcrumbs={[
-          { label: 'Trang chủ', link: '/admin' }
+          { label: 'Trang chủ' }
         ]} 
       />
-      
-      {/* Thống kê tổng quan */}
+
       <Grid container spacing={3} mb={3}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Tổng số học sinh"
+            title="Tổng học sinh"
             value={stats.totalStudents}
-            subtitle="Đang hoạt động"
-            icon={<People />}
+            icon={<Person fontSize="large" />}
             color="primary"
           />
         </Grid>
-        
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Tổng số lớp học"
+            title="Tổng lớp học"
             value={stats.totalClasses}
-            subtitle={`${stats.activeClasses} lớp đang mở`}
-            icon={<Class />}
-            color="info"
+            icon={<School fontSize="large" />}
+            color="secondary"
           />
         </Grid>
-        
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Doanh thu"
-            value={`${stats.totalRevenue.toLocaleString('vi-VN')} VNĐ`}
-            subtitle="Tổng thu nhập"
-            icon={<MonetizationOn />}
+            title="Doanh thu tổng"
+            value={stats.totalRevenue}
+            icon={<Payment fontSize="large" />}
             color="success"
           />
         </Grid>
-        
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            title="Tỷ lệ điểm danh"
-            value={`${stats.attendanceRate}%`}
-            subtitle="Trung bình tất cả lớp"
-            icon={<EventNote />}
+            title="Đăng ký đang hoạt động"
+            value={stats.activeEnrollments}
+            icon={<Assignment fontSize="large" />}
             color="warning"
           />
         </Grid>
       </Grid>
-      
-      {/* Cảnh báo */}
-      {(stats.unpaidCount > 0 || stats.absentCount > 0) && (
-        <Grid container spacing={3} mb={3}>
-          {stats.unpaidCount > 0 && (
-            <Grid item xs={12} md={6}>
-              <Alert severity="warning" icon={<Warning />}>
-                Có {stats.unpaidCount} học sinh chưa đóng học phí
-              </Alert>
-            </Grid>
-          )}
-          
-          {stats.absentCount > 0 && (
-            <Grid item xs={12} md={6}>
-              <Alert severity="error" icon={<Warning />}>
-                Có {stats.absentCount} học sinh vắng học nhiều buổi
-              </Alert>
-            </Grid>
-          )}
-        </Grid>
-      )}
-      
+
       <Grid container spacing={3}>
-        {/* Biểu đồ phân bố lớp học */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Phân bố lớp học theo môn
-              </Typography>
-              <Box height={300}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={chartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
+        <Grid item xs={12} lg={8}>
+          <Paper sx={{ p: 3, height: 400 }}>
+            <Typography variant="h6" gutterBottom>
+              Doanh thu 6 tháng gần đây
+            </Typography>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip formatter={(value) => `${value.toLocaleString('vi-VN')} VNĐ`} />
+                <Line type="monotone" dataKey="revenue" stroke="#5c9bd5" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Paper>
         </Grid>
-        
-        {/* Thanh toán gần đây */}
-        <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Thanh toán gần đây
-              </Typography>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Học sinh</TableCell>
-                      <TableCell>Lớp học</TableCell>
-                      <TableCell align="right">Số tiền</TableCell>
-                      <TableCell>Ngày thanh toán</TableCell>
-                      <TableCell align="center">Trạng thái</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {recentPayments.map((payment) => (
-                      <TableRow key={payment.id}>
-                        <TableCell>{payment.students?.full_name}</TableCell>
-                        <TableCell>{payment.classes?.name}</TableCell>
-                        <TableCell align="right">{payment.amount.toLocaleString('vi-VN')} VNĐ</TableCell>
-                        <TableCell>{dayjs(payment.payment_date).format('DD/MM/YYYY')}</TableCell>
-                        <TableCell align="center">
-                          <Chip 
-                            label={payment.status === 'completed' ? 'Đã thanh toán' : 'Đang xử lý'}
-                            color={payment.status === 'completed' ? 'success' : 'warning'}
-                            size="small"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              
-              <Box display="flex" justifyContent="flex-end" mt={2}>
-                <Button variant="outlined" href="/admin/payments">
-                  Xem tất cả
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        {/* Học sinh cần chú ý */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Học sinh chưa đóng học phí
-              </Typography>
-              <List>
-                {unpaidStudents.map((student) => (
-                  <ListItem key={`${student.id}-${student.class_id}`}>
-                    <ListItemAvatar>
-                      <Avatar>
-                        {student.full_name.charAt(0)}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={student.full_name}
-                      secondary={`${student.class_name} - ${student.amount_due.toLocaleString('vi-VN')} VNĐ`}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-              
-              <Box display="flex" justifyContent="flex-end" mt={2}>
-                <Button variant="outlined" href="/admin/reports">
-                  Xem chi tiết
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        {/* Học sinh vắng nhiều */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Học sinh vắng học nhiều
-              </Typography>
-              <List>
-                {absentStudents.map((student) => (
-                  <ListItem key={`${student.id}-${student.class_id}`}>
-                    <ListItemAvatar>
-                      <Avatar>
-                        {student.full_name.charAt(0)}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={student.full_name}
-                      secondary={`${student.class_name} - ${student.absent_count} buổi vắng`}
-                    />
-                  </ListItem>
-                ))}
-              </List>
-              
-              <Box display="flex" justifyContent="flex-end" mt={2}>
-                <Button variant="outlined" href="/admin/reports">
-                  Xem chi tiết
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
+
+        <Grid item xs={12} lg={4}>
+          <Paper sx={{ p: 3, height: 400 }}>
+            <Typography variant="h6" gutterBottom>
+              Hoạt động gần đây
+            </Typography>
+            <List sx={{ maxHeight: 320, overflow: 'auto' }}>
+              {recentActivities.map((activity, index) => (
+                <ListItem key={index} divider>
+                  <ListItemIcon>
+                    {activity.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={activity.message}
+                    secondary={new Date(activity.time).toLocaleDateString('vi-VN')}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
         </Grid>
       </Grid>
     </Box>

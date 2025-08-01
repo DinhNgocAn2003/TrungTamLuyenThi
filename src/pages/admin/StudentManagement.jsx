@@ -60,7 +60,8 @@ import {
   getEnrollments,
   getPayments,
   getAttendance,
-  createUser
+  createUser,
+  updateUserProfile
 } from '../../services/supabase/database';
 import { useLoading } from '../../contexts/LoadingContext';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -98,9 +99,10 @@ function StudentManagement() {
     parent_phone: '',
     parent_zalo: '',
     school: '',
-    grade: '',
     notes: ''
   });
+
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const [accountData, setAccountData] = useState({
     username: '',
@@ -124,6 +126,13 @@ function StudentManagement() {
       setFilteredStudents(filtered);
     }
   }, [searchTerm, students]);
+
+  // Theo dõi thay đổi của selectedStudent để đảm bảo UI luôn được cập nhật
+  useEffect(() => {
+    if (selectedStudent) {
+      console.log('🔄 Selected student changed, updating state...', selectedStudent.full_name);
+    }
+  }, [selectedStudent]);
 
   const fetchStudents = async () => {
     setLoading(true);
@@ -170,6 +179,53 @@ function StudentManagement() {
     }
   };
 
+  const refreshSelectedStudent = async (studentId) => {
+    try {
+      console.log('🔄 Refreshing selected student with ID:', studentId);
+      
+      // Fetch lại danh sách students mới nhất với đầy đủ thông tin join
+      const { data: updatedStudentsData, error: studentsError } = await getStudents();
+      if (studentsError) throw studentsError;
+      
+      if (updatedStudentsData) {
+        const updatedStudent = updatedStudentsData.find(s => s.id === studentId);
+        if (updatedStudent) {
+          console.log('✅ Found refreshed student data:', updatedStudent);
+          console.log('📊 Student structure:', JSON.stringify(updatedStudent, null, 2));
+          
+          // Cập nhật selectedStudent với dữ liệu mới
+          setSelectedStudent(updatedStudent);
+          
+          // Cập nhật danh sách students và filteredStudents
+          setStudents(updatedStudentsData);
+          
+          // Cập nhật filteredStudents dựa trên searchTerm hiện tại
+          if (searchTerm.trim() === '') {
+            setFilteredStudents(updatedStudentsData);
+          } else {
+            const filtered = updatedStudentsData.filter(student => 
+              student.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              (student.email && student.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+              (student.phone && student.phone.includes(searchTerm))
+            );
+            setFilteredStudents(filtered);
+          }
+          
+          // Force re-render bằng cách trigger state change
+          console.log('🎯 UI should now reflect updated data for:', updatedStudent.full_name);
+          
+          return updatedStudent;
+        } else {
+          console.error('❌ Could not find updated student with ID:', studentId);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing selected student:', error);
+      showNotification('Lỗi khi làm mới thông tin học sinh: ' + error.message, 'error');
+    }
+    return null;
+  };
+
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
@@ -180,12 +236,44 @@ function StudentManagement() {
   };
 
   const handleOpenDialog = (student = null) => {
+    console.log('🚪 handleOpenDialog called with:', student); // Debug entry point
     if (student) {
-      setFormData({
-        ...student,
-        date_of_birth: student.date_of_birth ? dayjs(student.date_of_birth) : null
-      });
+      // Flatten dữ liệu từ student và user_profiles
+      // Handle case where user_profiles might be array or object
+      let profile = {};
+      if (student.user_profiles) {
+        if (Array.isArray(student.user_profiles)) {
+          profile = student.user_profiles[0] || {};
+          console.log('📊 user_profiles is ARRAY, taking first element:', profile);
+        } else {
+          profile = student.user_profiles;
+          console.log('📊 user_profiles is OBJECT:', profile);
+        }
+      }
+      setIsEditMode(true);
+      
+      const formDataToSet = {
+        // Thông tin từ bảng students
+        user_id: student.user_id,
+        parent_name: student.parent_name || '',
+        parent_phone: student.parent_phone || '',
+        parent_zalo: student.parent_zalo || '',
+        school: student.school || '',
+        notes: student.notes || '',
+        gender: student.gender || '',
+        // Thông tin từ bảng user_profiles
+        full_name: profile.full_name || '',
+        date_of_birth: student.date_of_birth ? dayjs(student.date_of_birth) : null,
+        address: student.address || '',
+        phone: profile.phone || '',
+        email: profile.email || ''
+      };
+      
+      console.log('📝 Form data to set:', formDataToSet); // Debug form data
+      setFormData(formDataToSet);
     } else {
+      console.log('🆕 Opening dialog for NEW student'); // Debug new mode
+      setIsEditMode(false);
       setFormData({
         full_name: '',
         date_of_birth: null,
@@ -197,7 +285,6 @@ function StudentManagement() {
         parent_phone: '',
         parent_zalo: '',
         school: '',
-        grade: '',
         notes: ''
       });
     }
@@ -205,7 +292,23 @@ function StudentManagement() {
   };
 
   const handleCloseDialog = () => {
+    console.log('🚪 Closing dialog, resetting states'); // Debug log
     setOpenDialog(false);
+    setIsEditMode(false);
+    // Reset form data để tránh carry-over
+    setFormData({
+      full_name: '',
+      date_of_birth: null,
+      gender: '',
+      address: '',
+      phone: '',
+      email: '',
+      parent_name: '',
+      parent_phone: '',
+      parent_zalo: '',
+      school: '',
+      notes: ''
+    });
   };
 
   const handleOpenDeleteDialog = () => {
@@ -289,38 +392,114 @@ function StudentManagement() {
     if (!formData.full_name) {
       showNotification('Vui lòng nhập họ tên học sinh', 'error');
       return;
-    }
-    
+    }   
     setLoading(true);
     try {
+      // Tách dữ liệu cho bảng students
+      console.log('📝 Preparing student data for submission:', formData);
       const studentData = {
-        ...formData,
-        date_of_birth: formData.date_of_birth ? formData.date_of_birth.format('YYYY-MM-DD') : null
+        user_id: formData.user_id,
+        parent_name: formData.parent_name || null,
+        parent_phone: formData.parent_phone || null,
+        gender:formData.gender??'Nam',
+        parent_zalo: formData.parent_zalo || null,
+        school: formData.school || null,
+        notes: formData.notes || null
+      };
+
+      // Tách dữ liệu cho bảng user_profiles  
+      const profileData = {
+        full_name: formData.full_name,
+        phone: formData.phone || null,
+        email: formData.email && formData.email.trim() !== '' ? formData.email : null, // null thay vì chuỗi rỗng
       };
       
       let result;
-      
-      if (formData.id) {
-        // Cập nhật học sinh
-        result = await updateStudent(formData.id, studentData);
+      // Kiểm tra cẩn thận điều kiện edit mode
+      const isActuallyEditMode = isEditMode && (formData.user_id || selectedStudent?.user_id);
+
+      if (isActuallyEditMode) {
+        // Cập nhật học sinh - cập nhật cả students và user_profiles
+        const studentIdToUpdate = formData.user_id || selectedStudent.user_id;
+        
+        result = await updateStudent(studentIdToUpdate, studentData);
+        if (result.error) {
+          console.error('❌ Error updating student:', result.error);
+          throw result.error;
+        }
+        // Cập nhật user_profiles (chỉ khi có user_id)
+        if (formData.user_id) {
+          const profileResult = await updateUserProfile(formData.user_id, profileData);
+          if (profileResult.error) {
+            console.error('❌ Error updating profile:', profileResult.error);
+            throw profileResult.error;
+          }
+        }
+        
+        console.log('✅ Student and profile updated successfully');
+        
+        // Cập nhật selectedStudent ngay lập tức với dữ liệu mới
+        const updatedSelectedStudent = {
+          ...selectedStudent,
+          // Cập nhật thông tin từ students table
+          parent_name: formData.parent_name,
+          parent_phone: formData.parent_phone,
+          gender: formData.gender,
+          parent_zalo: formData.parent_zalo,
+          school: formData.school,
+          notes: formData.notes,
+          date_of_birth: formData.date_of_birth ? formData.date_of_birth.format('YYYY-MM-DD') : selectedStudent.date_of_birth,
+          address: formData.address,
+          // Cập nhật thông tin từ user_profiles
+          full_name: profileData.full_name,
+          phone: profileData.phone,
+          email: profileData.email,
+          // Nếu có user_profiles object, cập nhật nó cũng
+          user_profiles: selectedStudent.user_profiles ? {
+            ...selectedStudent.user_profiles,
+            full_name: profileData.full_name,
+            phone: profileData.phone,
+            email: profileData.email
+          } : null
+        };
+        
+        console.log('🔄 Updating selectedStudent immediately:', updatedSelectedStudent);
+        setSelectedStudent(updatedSelectedStudent);
+        
+        // Cập nhật danh sách students
+        setStudents(prevStudents => 
+          prevStudents.map(student => 
+            student.id === selectedStudent.id ? updatedSelectedStudent : student
+          )
+        );
+        
+        // Cập nhật filteredStudents
+        setFilteredStudents(prevFiltered => 
+          prevFiltered.map(student => 
+            student.id === selectedStudent.id ? updatedSelectedStudent : student
+          )
+        );
+        
       } else {
         // Tạo học sinh mới
-        result = await createStudent(studentData);
+        console.log('🆕 CREATE MODE');
+        const combinedData = { ...studentData, ...profileData };
+        console.log('📝 Combined data to create:', combinedData);
+        result = await createStudent(combinedData);
       }
       
       if (result.error) throw result.error;
       
       showNotification(
-        formData.id ? 'Cập nhật thông tin học sinh thành công' : 'Thêm học sinh mới thành công',
+        isActuallyEditMode ? 'Cập nhật thông tin học sinh thành công' : 'Thêm học sinh mới thành công',
         'success'
       );
       
       handleCloseDialog();
-      fetchStudents();
       
-      // Nếu đang cập nhật học sinh đang chọn, cập nhật thông tin
-      if (selectedStudent && selectedStudent.id === formData.id) {
-        setSelectedStudent(result.data[0]);
+      // Chỉ refresh từ database cho trường hợp tạo mới
+      if (!isActuallyEditMode) {
+        await fetchStudents();
       }
       
     } catch (error) {
@@ -584,10 +763,9 @@ function StudentManagement() {
       // Tạo header cho template
       const headers = ['Họ và tên', 'Ngày sinh', 'Giới tính', 'Địa chỉ', 'Điện thoại', 'Email', 'Phụ huynh', 'SĐT phụ huynh', 'Zalo phụ huynh', 'Trường', 'Lớp'];
       
-      // Tạo một mảng dữ liệu với header và một dòng mẫu
+      // Tạo một mảng dữ liệu với header
       const data = [
-        headers,
-        ['Nguyễn Văn A', '01-01-2010', 'Nam', 'Hà Nội', '0123456789', 'email@example.com', 'Nguyễn Văn B', '0987654321', '0987654321', 'THPT Chu Văn An', '10A1', 'Ghi chú mẫu']
+        headers
       ];
       
       // Tạo worksheet từ dữ liệu
@@ -684,7 +862,7 @@ function StudentManagement() {
           placeholder="Tìm kiếm học sinh..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          sx={{ flexGrow: 1, maxWidth: '500px' }}
+          sx={{ flexGrow: 1, maxWidth: '500px', border: '1px solid white', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.1)' }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -699,6 +877,7 @@ function StudentManagement() {
             variant="outlined"
             startIcon={<DownloadIcon />}
             onClick={handleExportTemplate}
+            sx={{ borderColor: 'white',color: 'white', '&:hover': { borderColor: 'white', backgroundColor: 'rgba(255,255,255,0.1)' } }}
           >
             Tải file mẫu
           </Button>
@@ -707,6 +886,7 @@ function StudentManagement() {
             variant="outlined"
             startIcon={<UploadFileIcon />}
             onClick={handleOpenImportDialog}
+              sx={{ borderColor: 'white',color: 'white', '&:hover': { borderColor: 'white', backgroundColor: 'rgba(255,255,255,0.1)' } }}
           >
             Nhập từ Excel
           </Button>
@@ -715,6 +895,7 @@ function StudentManagement() {
             variant="outlined"
             startIcon={<DownloadIcon />}
             onClick={handleExportStudents}
+              sx={{ borderColor: 'white',color: 'white', '&:hover': { borderColor: 'white', backgroundColor: 'rgba(255,255,255,0.1)' } }}
           >
             Xuất Excel
           </Button>
@@ -820,7 +1001,9 @@ function StudentManagement() {
                   </IconButton>
                   <IconButton 
                     color="primary" 
-                    onClick={() => handleOpenDialog(selectedStudent)}
+                    onClick={() => {
+                      handleOpenDialog(selectedStudent);
+                    }}
                     sx={{ mr: 1 }}
                     title="Sửa thông tin"
                   >
@@ -840,10 +1023,10 @@ function StudentManagement() {
               
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                 <Box>
-                  {selectedStudent.id && (
+                  {selectedStudent.user_id && (
                     <Chip 
                       icon={<QrCodeIcon />} 
-                      label={`Mã QR: ${selectedStudent.id}`} 
+                      label={`Mã điểm danh: ${selectedStudent.user_id}`} 
                       color="primary" 
                       variant="outlined" 
                       sx={{ mr: 1 }}
@@ -883,62 +1066,80 @@ function StudentManagement() {
               {tabValue === 0 && (
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle1" gutterBottom>Ngày sinh</Typography>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Ngày sinh</Typography>
                     <Typography variant="body1" paragraph>
                       {selectedStudent.date_of_birth ? dayjs(selectedStudent.date_of_birth).format('DD-MM-YYYY') : 'Chưa cập nhật'}
                     </Typography>
                     
-                    <Typography variant="subtitle1" gutterBottom>Giới tính</Typography>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Giới tính</Typography>
                     <Typography variant="body1" paragraph>
                       {selectedStudent.gender || 'Chưa cập nhật'}
                     </Typography>
                     
-                    <Typography variant="subtitle1" gutterBottom>Địa chỉ</Typography>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Địa chỉ</Typography>
                     <Typography variant="body1" paragraph>
                       {selectedStudent.address || 'Chưa cập nhật'}
                     </Typography>
                     
-                    <Typography variant="subtitle1" gutterBottom>Số điện thoại</Typography>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Số điện thoại</Typography>
                     <Typography variant="body1" paragraph>
-                      {selectedStudent.phone || 'Chưa cập nhật'}
+                      {(() => {
+                        // Lấy phone từ user_profiles nếu có, nếu không thì từ selectedStudent
+                        let phone = selectedStudent.phone;
+                        if (selectedStudent.user_profiles) {
+                          if (Array.isArray(selectedStudent.user_profiles)) {
+                            phone = selectedStudent.user_profiles[0]?.phone || selectedStudent.phone;
+                          } else {
+                            phone = selectedStudent.user_profiles.phone || selectedStudent.phone;
+                          }
+                        }
+                        return phone || 'Chưa cập nhật';
+                      })()}
                     </Typography>
                     
-                    <Typography variant="subtitle1" gutterBottom>Email</Typography>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Email</Typography>
                     <Typography variant="body1" paragraph>
-                      {selectedStudent.email || 'Chưa cập nhật'}
+                      {(() => {
+                        // Lấy email từ user_profiles nếu có, nếu không thì từ selectedStudent
+                        let email = selectedStudent.email;
+                        if (selectedStudent.user_profiles) {
+                          if (Array.isArray(selectedStudent.user_profiles)) {
+                            email = selectedStudent.user_profiles[0]?.email || selectedStudent.email;
+                          } else {
+                            email = selectedStudent.user_profiles.email || selectedStudent.email;
+                          }
+                        }
+                        return email || 'Chưa cập nhật';
+                      })()}
                     </Typography>
                   </Grid>
                   
                   <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle1" gutterBottom>Phụ huynh</Typography>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Phụ huynh</Typography>
                     <Typography variant="body1" paragraph>
                       {selectedStudent.parent_name || 'Chưa cập nhật'}
                     </Typography>
                     
-                    <Typography variant="subtitle1" gutterBottom>Số điện thoại phụ huynh</Typography>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Số điện thoại phụ huynh</Typography>
                     <Typography variant="body1" paragraph>
                       {selectedStudent.parent_phone || 'Chưa cập nhật'}
                     </Typography>
                     
-                    <Typography variant="subtitle1" gutterBottom>Zalo phụ huynh</Typography>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Zalo phụ huynh</Typography>
                     <Typography variant="body1" paragraph>
                       {selectedStudent.parent_zalo || 'Chưa cập nhật'}
                     </Typography>
                     
-                    <Typography variant="subtitle1" gutterBottom>Trường</Typography>
+                    <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Trường</Typography>
                     <Typography variant="body1" paragraph>
                       {selectedStudent.school || 'Chưa cập nhật'}
                     </Typography>
                     
-                    <Typography variant="subtitle1" gutterBottom>Lớp</Typography>
-                    <Typography variant="body1" paragraph>
-                      {selectedStudent.grade || 'Chưa cập nhật'}
-                    </Typography>
                   </Grid>
                   
                   {selectedStudent.notes && (
                     <Grid item xs={12}>
-                      <Typography variant="subtitle1" gutterBottom>Ghi chú</Typography>
+                      <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>Ghi chú</Typography>
                       <Typography variant="body1" paragraph>
                         {selectedStudent.notes}
                       </Typography>
@@ -1112,7 +1313,7 @@ function StudentManagement() {
       {/* Dialog thêm/sửa học sinh */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
         <DialogTitle>
-          {formData.id ? 'Cập nhật thông tin học sinh' : 'Thêm học sinh mới'}
+          {isEditMode ? 'Cập nhật thông tin học sinh' : 'Thêm học sinh mới'}
         </DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
@@ -1199,17 +1400,6 @@ function StudentManagement() {
             
             <Grid item xs={12} sm={6}>
               <TextField
-                name="grade"
-                label="Lớp"
-                fullWidth
-                value={formData.grade}
-                onChange={handleInputChange}
-                margin="normal"
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <TextField
                 name="parent_name"
                 label="Họ tên phụ huynh"
                 fullWidth
@@ -1259,7 +1449,7 @@ function StudentManagement() {
         <DialogActions>
           <Button onClick={handleCloseDialog}>Hủy</Button>
           <Button onClick={handleSubmit} variant="contained" color="primary">
-            {formData.id ? 'Cập nhật' : 'Thêm mới'}
+            {isEditMode ? 'Cập nhật' : 'Thêm mới'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1281,15 +1471,15 @@ function StudentManagement() {
         </DialogActions>
       </Dialog>
       
-      {/* Dialog hiển thị mã QR */}
+      {/* Dialog hiển thị mã QR điểm danh */}
       <Dialog open={qrDialog} onClose={handleCloseQrDialog}>
-        <DialogTitle>Mã QR của học sinh</DialogTitle>
+        <DialogTitle>Mã QR điểm danh của học sinh</DialogTitle>
         <DialogContent>
           <Box display="flex" flexDirection="column" alignItems="center" my={2}>
-            {selectedStudent?.id ? (
+            {selectedStudent?.user_id ? (
               <>
                 <QRCode 
-                  value={selectedStudent.id} 
+                  value={selectedStudent.user_id} 
                   size={200}
                   level="H"
                   includeMargin
@@ -1298,7 +1488,7 @@ function StudentManagement() {
                   {selectedStudent.full_name}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" mt={1}>
-                  Mã học sinh: {selectedStudent.id}
+                  Mã điểm danh: {selectedStudent.user_id}
                 </Typography>
                 <Button
                   variant="outlined"
@@ -1308,7 +1498,7 @@ function StudentManagement() {
                     const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
                     let downloadLink = document.createElement("a");
                     downloadLink.href = pngUrl;
-                    downloadLink.download = `QR_${selectedStudent.id}_${selectedStudent.full_name.replace(/\s+/g, '_')}.png`;
+                    downloadLink.download = `QR_${selectedStudent.user_id}_${selectedStudent.full_name.replace(/\s+/g, '_')}.png`;
                     document.body.appendChild(downloadLink);
                     downloadLink.click();
                     document.body.removeChild(downloadLink);
@@ -1320,7 +1510,7 @@ function StudentManagement() {
               </>
             ) : (
               <Typography variant="body1" color="error">
-                Học sinh chưa có mã học sinh. Vui lòng cập nhật thông tin học sinh.
+                Học sinh chưa có tài khoản. Vui lòng tạo tài khoản trước để tạo mã điểm danh.
               </Typography>
             )}
           </Box>

@@ -149,6 +149,18 @@ function UserManagement() {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setSelectedUser(null);
+    // Reset form data khi đóng dialog
+    setFormData({
+      full_name: '',
+      phone: '',
+      password: '',
+      role: 'student',
+      // Student specific fields
+      date_of_birth: '',
+      parent_name: '',
+      parent_phone: '',
+      parent_zalo: ''
+    });
   };
   
   const handleInputChange = (e) => {
@@ -369,7 +381,7 @@ function UserManagement() {
           placeholder="Tìm kiếm tài khoản..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          sx={{ flexGrow: 1, maxWidth: '500px' }}
+          sx={{ flexGrow: 1, maxWidth: '500px', border: '1px solid white', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.1)' }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -494,12 +506,18 @@ function UserManagement() {
       </Paper>
       
       {/* Dialog thêm/sửa tài khoản */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog} 
+        maxWidth="sm" 
+        fullWidth
+        key={selectedUser ? selectedUser.user_id : 'new-user'}
+      >
         <DialogTitle>
           {selectedUser ? 'Cập nhật tài khoản' : 'Thêm tài khoản mới'}
         </DialogTitle>
         <DialogContent dividers>
-          <Grid container spacing={2}>
+          <Grid container spacing={2} key={openDialog ? 'form-open' : 'form-closed'}>
             <Grid item xs={12}>
               <TextField
                 name="full_name"
@@ -510,6 +528,7 @@ function UserManagement() {
                 margin="normal"
                 required
                 autoFocus
+                autoComplete="off"
               />
             </Grid>
             
@@ -525,6 +544,7 @@ function UserManagement() {
                 margin="normal"
                 required
                 disabled={!!selectedUser}
+                autoComplete="off"
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -546,6 +566,7 @@ function UserManagement() {
                   onChange={handleInputChange}
                   margin="normal"
                   required
+                  autoComplete="new-password"
                   InputProps={{
                     endAdornment: (
                       <InputAdornment position="end">
@@ -590,6 +611,7 @@ function UserManagement() {
                     type="date"
                     value={formData.date_of_birth}
                     onChange={handleInputChange}
+                    autoComplete="off"
                     InputLabelProps={{
                       shrink: true,
                     }}
@@ -604,6 +626,7 @@ function UserManagement() {
                     label="Tên phụ huynh"
                     value={formData.parent_name}
                     onChange={handleInputChange}
+                    autoComplete="off"
                   />
                 </Grid>
                 
@@ -616,6 +639,7 @@ function UserManagement() {
                     value={formData.parent_phone}
                     onChange={handleInputChange}
                     placeholder="0xxxxxxxxx"
+                    autoComplete="off"
                   />
                 </Grid>
                 
@@ -628,6 +652,7 @@ function UserManagement() {
                     value={formData.parent_zalo}
                     onChange={handleInputChange}
                     placeholder="0xxxxxxxxx"
+                    autoComplete="off"
                   />
                 </Grid>
               </>

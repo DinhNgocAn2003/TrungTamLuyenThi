@@ -7,7 +7,7 @@ const StatsCard = ({
   change, 
   changeType = 'increase', 
   icon, 
-  color = '#667eea',
+  color = '#5c9bd5', // Softer default color
   gradient
 }) => {
   const cardGradient = gradient || `linear-gradient(135deg, ${color}40, ${color}60)`;
