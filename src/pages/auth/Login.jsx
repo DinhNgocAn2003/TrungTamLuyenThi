@@ -38,24 +38,16 @@ function Login() {
   
   // Nếu đã đăng nhập, chuyển hướng dựa vào role
   useEffect(() => {
-    // Redirect ngay khi có user và role (không cần đợi userProfile)
-    if (!loading && user) {
-      console.log('=== REDIRECT CHECK ===');
-      console.log('User ID:', user.id);
-      console.log('User metadata role:', user.user_metadata?.role);
-      console.log('UserProfile role:', userProfile?.role);
-      console.log('Loading status:', loading);
-      
-      // Lấy role từ metadata trước, userProfile sau (để nhanh hơn)
-      const role = (user.user_metadata?.role || userProfile?.role)?.toLowerCase();
-      console.log('Final role for redirect:', role);
+    // Chỉ redirect khi có user và userProfile (để lấy role)
+    if (!loading && user && userProfile) {
+      const role = userProfile?.role?.toLowerCase();
       
       if (!role) {
-        console.log('❌ No role found, staying on login');
+        showNotification('Tài khoản chưa được phân quyền. Vui lòng liên hệ quản trị viên.', 'warning');
         return;
       }
       
-      // Redirect ngay lập tức không cần delay
+      // Redirect dựa trên role từ user_profiles
       if (role === 'admin') {
         console.log('✅ Redirecting to ADMIN dashboard');
         navigate('/admin/dashboard', { replace: true });
@@ -67,14 +59,19 @@ function Login() {
         navigate('/student/dashboard', { replace: true });
       } else {
         console.log('❌ Unknown role:', role);
+        showNotification('Vai trò không hợp lệ. Vui lòng liên hệ quản trị viên.', 'error');
       }
+    } else if (!loading && user && !userProfile) {
+      console.log('⏳ User logged in but waiting for profile to load from user_profiles...');
     } else {
       console.log('⏳ Waiting for auth:', { 
         loading, 
-        hasUser: !!user
+        hasUser: !!user,
+        hasProfile: !!userProfile,
+        userEmail: user?.email
       });
     }
-  }, [user, userProfile, loading, navigate]);
+  }, [user, userProfile, loading, navigate, showNotification]);
   
   // Nếu đang loading, hiển thị loading
   if (loading) {
@@ -91,8 +88,8 @@ function Login() {
     );
   }
 
-  // Nếu đang loading hoặc đã có user với role thì hiển thị loading
-  if (loading || (user && user.user_metadata?.role)) {
+  // Nếu đang loading hoặc đã có user nhưng chưa có userProfile thì hiển thị loading
+  if (loading || (user && !userProfile)) {
     return (
       <Box sx={{ 
         minHeight: '100vh', 
@@ -104,7 +101,7 @@ function Login() {
       }}>
         <CircularProgress size={60} sx={{ color: 'white', mb: 2 }} />
         <Typography variant="h6" sx={{ color: 'white', textAlign: 'center' }}>
-          {loading ? 'Đang kiểm tra đăng nhập...' : 'Đang chuyển hướng...'}
+          {loading ? 'Đang kiểm tra đăng nhập...' : 'Đang tải thông tin người dùng...'}
         </Typography>
       </Box>
     );
@@ -147,22 +144,43 @@ function Login() {
     setErrors({});
     
     try {
+      console.log('🔐 Attempting login...');
       const result = await signIn(email, password);
       
       if (result.error) {
-        throw result.error;
+        console.error('❌ Login failed:', result.error);
+        
+        // Handle specific error types
+        let errorMessage = 'Đăng nhập thất bại';
+        
+        if (result.error.message?.includes('Invalid login credentials')) {
+          errorMessage = 'Email/số điện thoại hoặc mật khẩu không đúng';
+        } else if (result.error.message?.includes('Email not confirmed')) {
+          errorMessage = 'Tài khoản chưa được xác thực. Vui lòng kiểm tra email';
+        } else if (result.error.message?.includes('Too many requests')) {
+          errorMessage = 'Quá nhiều lần thử. Vui lòng thử lại sau';
+        } else if (result.error.message?.includes('Network')) {
+          errorMessage = 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet';
+        } else {
+          errorMessage = result.error.message || 'Có lỗi xảy ra khi đăng nhập';
+        }
+        
+        showNotification(errorMessage, 'error');
+        setErrors({ 
+          general: errorMessage 
+        });
+      } else {
+        console.log('✅ Login successful');
+        showNotification('Đăng nhập thành công!', 'success');
+        // Navigation will be handled by useEffect
       }
-      
-      showNotification('Đăng nhập thành công!', 'success');
-      
-      // Redirect sẽ được handle tự động bởi useEffect khi user state thay đổi
-      
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ Unexpected login error:', error);
+      const errorMessage = 'Có lỗi không mong muốn xảy ra. Vui lòng thử lại';
+      showNotification(errorMessage, 'error');
       setErrors({ 
-        general: error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại email và mật khẩu.' 
+        general: errorMessage 
       });
-      showNotification('Đăng nhập thất bại', 'error');
     } finally {
       setIsSubmitting(false);
     }

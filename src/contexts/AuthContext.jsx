@@ -29,10 +29,12 @@ export const AuthProvider = ({ children }) => {
 
   const refreshUserProfile = useCallback(async (userId) => {
     if (!userId) return null;
-    
     try {
       const { data: profile, error } = await getUserProfileById(userId);
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return null;
+      }
       
       setAuthState(prev => ({
         ...prev,
@@ -45,6 +47,52 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Sign out function
+  const signOut = async () => {
+    try {
+      // Clear auto logout timer
+      if (window.autoLogoutTimer) {
+        clearTimeout(window.autoLogoutTimer);
+      }
+      
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      setAuthState({
+        user: null,
+        userProfile: null,
+        loading: false
+      });
+      
+      return { error: null };
+    } catch (error) {
+      console.error('Sign out error:', error);
+      return { error };
+    }
+  };
+
+  // Auto logout function
+  const autoLogout = useCallback(async () => {
+    await signOut();
+    // Redirect to login page
+    window.location.href = '/login';
+  }, []);
+
+  // Setup auto logout timer
+  const setupAutoLogout = useCallback((expiresAt) => {
+    const now = Math.floor(Date.now() / 1000);
+    const timeUntilExpiry = (expiresAt - now) * 1000; // Convert to milliseconds
+    
+    // Clear any existing timeout
+    if (window.autoLogoutTimer) {
+      clearTimeout(window.autoLogoutTimer);
+    }
+    
+    if (timeUntilExpiry > 0) {
+      window.autoLogoutTimer = setTimeout(autoLogout, timeUntilExpiry);
+    }
+  }, [autoLogout]);
+
   useEffect(() => {
     let timeoutId;
     
@@ -55,15 +103,17 @@ export const AuthProvider = ({ children }) => {
         if (error) throw error;
         
         if (session?.user) {
-          console.log('🔍 Session found, setting user immediately...');
-          // Set user ngay lập tức để login nhanh
+          
           setAuthState({
             user: session.user,
             userProfile: null,
             loading: false
           });
           
-          // Load profile trong background (không block UI)
+          // Setup auto logout
+          setupAutoLogout(session.expires_at);
+          
+          // Load profile trong background
           refreshUserProfile(session.user.id);
         } else {
           console.log('❌ No session found');
@@ -79,19 +129,22 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    // Timeout rất ngắn (300ms) để tránh loading lâu
+    // Timeout để tránh loading lâu
     timeoutId = setTimeout(() => {
       setAuthState(prev => ({ ...prev, loading: false }));
-    }, 300);
+    }, 1000);
 
     getSession();
 
     // Lắng nghe thay đổi auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // console.log('🔐 Auth state changed:', event, session?.user?.id);
       
       if (event === 'TOKEN_REFRESHED') {
         console.log('🔄 Token refreshed successfully');
+        if (session) {
+          // Reset auto logout timer
+          setupAutoLogout(session.expires_at);
+        }
       } else if (event === 'SIGNED_OUT' || event === 'TOKEN_EXPIRED') {
         console.log('🚪 User signed out or token expired');
         setAuthState({
@@ -99,36 +152,28 @@ export const AuthProvider = ({ children }) => {
           userProfile: null,
           loading: false
         });
-        // Redirect to login if token expired
-        if (event === 'TOKEN_EXPIRED') {
-          window.location.href = '/login';
+        
+        // Clear auto logout timer
+        if (window.autoLogoutTimer) {
+          clearTimeout(window.autoLogoutTimer);
         }
+        
         return;
       }
       
       if (session?.user) {
-        // Check token expiration
-        const now = Math.floor(Date.now() / 1000);
-        const expiresAt = session.expires_at;
-        
-        if (expiresAt && now >= expiresAt) {
-          console.log('⏰ Token expired, signing out...');
-          await signOut();
-          return;
-        }
-        
-        console.log('👤 Setting user immediately, loading profile in background...');
-        // Set user ngay lập tức
         setAuthState({
           user: session.user,
           userProfile: null,
           loading: false
         });
         
+        // Setup auto logout
+        setupAutoLogout(session.expires_at);
+        
         // Load profile trong background
         refreshUserProfile(session.user.id);
       } else {
-        console.log('❌ No session in auth state change');
         setAuthState({
           user: null,
           userProfile: null,
@@ -139,51 +184,29 @@ export const AuthProvider = ({ children }) => {
 
     return () => {
       clearTimeout(timeoutId);
+      if (window.autoLogoutTimer) {
+        clearTimeout(window.autoLogoutTimer);
+      }
       subscription.unsubscribe();
     };
-  }, [refreshUserProfile]);
-
-  // Check token expiration định kỳ (mỗi 5 phút)
-  useEffect(() => {
-    const checkTokenExpiration = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const now = Math.floor(Date.now() / 1000);
-        const expiresAt = session.expires_at;
-        
-        // Nếu token sắp hết hạn trong 5 phút tới
-        if (expiresAt && (expiresAt - now) <= 300) {
-          console.log('⚠️ Token sắp hết hạn, đang refresh...');
-          const { error } = await supabase.auth.refreshSession();
-          if (error) {
-            console.error('❌ Không thể refresh token:', error);
-            await signOut();
-          }
-        }
-      }
-    };
-
-    // Check ngay lập tức
-    checkTokenExpiration();
-    
-    // Check mỗi 5 phút
-    const interval = setInterval(checkTokenExpiration, 5 * 60 * 1000);
-    
-    return () => clearInterval(interval);
-  }, []);
+  }, [refreshUserProfile, setupAutoLogout, autoLogout]);
 
   const signIn = async (emailOrPhone, password) => {
     try {
+      setAuthState(prev => ({ ...prev, loading: true }));
+      
       const { data, error } = await signInWithEmailOrPhone(emailOrPhone, password);
       
       if (error) {
+        setAuthState(prev => ({ ...prev, loading: false }));
         return { data: null, error };
       }
       
-      // Không cần set loading vì onAuthStateChange sẽ handle
+      // onAuthStateChange sẽ handle việc set user
       return { data, error: null };
     } catch (error) {
       console.error('Sign in error:', error);
+      setAuthState(prev => ({ ...prev, loading: false }));
       return { data: null, error };
     }
   };
@@ -207,24 +230,6 @@ export const AuthProvider = ({ children }) => {
       console.error('Sign up error:', error);
       setAuthState(prev => ({ ...prev, loading: false }));
       return { data: null, error };
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      
-      setAuthState({
-        user: null,
-        userProfile: null,
-        loading: false
-      });
-      
-      return { error: null };
-    } catch (error) {
-      console.error('Sign out error:', error);
-      return { error };
     }
   };
 

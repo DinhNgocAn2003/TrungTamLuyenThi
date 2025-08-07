@@ -73,3 +73,97 @@ export const getTeacherClasses = async (teacherId) => {
   
   return { data, error };
 };
+
+// Lấy danh sách môn học-lớp kết hợp
+export const getSubjectGrades = async () => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('subjects_grades')
+      .select(`
+        id,
+        name,
+        subjects(id, name),
+        grades(id, name)
+      `)
+      .order('name');
+
+    if (error) {
+      console.error('Error fetching subject grades:', error);
+      return { data: [], error };
+    }
+
+    // Chuyển đổi dữ liệu để dễ sử dụng
+    const formattedData = data.map(item => ({
+      id: item.id,
+      subject_id: item.subjects?.id,
+      subject_name: item.subjects?.name || '',
+      grade_id: item.grades?.id,
+      grade_name: item.grades?.name || ''
+    }));
+
+    return { data: formattedData, error: null };
+  } catch (error) {
+    console.error('Error in getSubjectGrades:', error);
+    return { data: [], error: error.message };
+  }
+};
+
+// Lấy môn học giảng dạy của giáo viên
+export const getTeacherSubjects = async (teacherId) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('teacher_subjects_grades')
+      .select(`
+        id,
+        subjects_grades:subjects_grades(
+          id,
+          subject:subjects(id, name),
+          grade:grades(id, name)
+        )
+      `)
+      .eq('teacher_id', teacherId);
+
+    if (error) {
+      console.error('Error fetching teacher subjects:', error);
+      return { data: [], error };
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error in getTeacherSubjects:', error);
+    return { data: [], error: error.message };
+  }
+};
+
+// Cập nhật môn học giảng dạy của giáo viên
+export const updateTeacherSubjects = async (teacherId, subjectGradeIds) => {
+  try {
+    // Xóa các môn học cũ
+    await supabaseAdmin
+      .from('teacher_subjects_grades')
+      .delete()
+      .eq('teacher_id', teacherId);
+
+    // Thêm các môn học mới
+    if (subjectGradeIds && subjectGradeIds.length > 0) {
+      const teacherSubjects = subjectGradeIds.map(id => ({
+        teacher_id: teacherId,
+        subject_grade_id: id  // Sửa lại tên cột cho đúng
+      }));
+
+      const { error: insertError } = await supabaseAdmin
+        .from('teacher_subjects_grades')
+        .insert(teacherSubjects);
+
+      if (insertError) {
+        console.error('Error inserting teacher subjects:', insertError);
+        return { error: insertError };
+      }
+    }
+
+    return { error: null };
+  } catch (error) {
+    console.error('Error in updateTeacherSubjects:', error);
+    return { error: error.message };
+  }
+};

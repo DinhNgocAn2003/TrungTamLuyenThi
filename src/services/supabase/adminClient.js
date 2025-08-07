@@ -6,11 +6,11 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
 
 // Debug environment variables
-console.log('🔧 Admin Client Debug:');
-console.log('URL:', supabaseUrl);
-console.log('Anon Key exists:', !!supabaseAnonKey);
-console.log('Service Key exists:', !!supabaseServiceKey);
-console.log('Service Key length:', supabaseServiceKey?.length);
+// console.log('🔧 Admin Client Debug:');
+// console.log('URL:', supabaseUrl);
+// console.log('Anon Key exists:', !!supabaseAnonKey);
+// console.log('Service Key exists:', !!supabaseServiceKey);
+// console.log('Service Key length:', supabaseServiceKey?.length);
 
 // Use service key for admin operations (bypasses RLS)
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {

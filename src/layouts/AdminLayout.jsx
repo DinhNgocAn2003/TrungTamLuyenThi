@@ -283,7 +283,7 @@ function AdminLayout() {
           <Box sx={{ 
             display: 'flex', 
             alignItems: 'center', 
-            gap: { xs: 0.5, md: 1 }, // Giảm gap trên mobile
+            gap: { xs: 1, md: 2 },
             flexShrink: 0 // Không cho shrink
           }}>
             <Tooltip title="Tài khoản quản trị">

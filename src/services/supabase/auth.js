@@ -92,10 +92,9 @@ export const updatePassword = async (newPassword) => {
 export const getUserProfileById = async (userId) => {
   const { data, error } = await supabase
     .from('user_profiles')
-    .select('*')
+    .select('user_id, role, full_name') // Chỉ lấy tối thiểu: user_id, role, full_name
     .eq('user_id', userId)
-    .single();
-  
+    .maybeSingle();
   return { data, error };
 };
 

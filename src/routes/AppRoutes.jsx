@@ -18,6 +18,7 @@ const AdminDashboard = lazy(() => import('../pages/admin/Dashboard'));
 const SubjectManagement = lazy(() => import('../pages/admin/SubjectManagement'));
 const ClassManagement = lazy(() => import('../pages/admin/ClassManagement'));
 const StudentManagement = lazy(() => import('../pages/admin/StudentManagement'));
+const TeacherManagement = lazy(() => import('../pages/admin/TeacherManagement'));
 const UserManagement = lazy(() => import('../pages/admin/UserManagement'));
 const Attendance = lazy(() => import('../pages/admin/Attendance'));
 const Payments = lazy(() => import('../pages/admin/Payments'));
@@ -172,19 +173,20 @@ const AppRoutes = () => {
           <Route path="subjects" element={<SubjectManagement />} />
           <Route path="classes" element={<ClassManagement />} />
           <Route path="students" element={<StudentManagement />} />
+          <Route path="teachers" element={<TeacherManagement />} />
           <Route path="users" element={<UserManagement />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="payments" element={<Payments />} />
           <Route path="reports" element={<Reports />} />
         </Route>
         
-        {/* Teacher routes - /user/teacher/* */}
-        <Route path="/user/teacher" element={
+        {/* Teacher routes - /teacher/* */}
+        <Route path="/teacher" element={
           <TeacherRoute>
             <TeacherLayout />
           </TeacherRoute>
         }>
-          <Route index element={<Navigate to="/user/teacher/dashboard" />} />
+          <Route index element={<Navigate to="/teacher/dashboard" />} />
           <Route path="dashboard" element={<TeacherDashboard />} />
           <Route path="classes" element={<TeacherClasses />} />
           <Route path="attendance" element={<TeacherAttendance />} />
@@ -192,13 +194,13 @@ const AppRoutes = () => {
           <Route path="grades" element={<TeacherGrades />} />
         </Route>
         
-        {/* Student routes - /user/student/* */}
-        <Route path="/user/student" element={
+        {/* Student routes - /student/* */}
+        <Route path="/student" element={
           <StudentRoute>
             <UserLayout />
           </StudentRoute>
         }>
-          <Route index element={<Navigate to="/user/student/dashboard" />} />
+          <Route index element={<Navigate to="/student/dashboard" />} />
           <Route path="dashboard" element={<StudentDashboard />} />
           <Route path="classes" element={<ClassRegistration />} />
           <Route path="attendance" element={<StudentAttendance />} />
