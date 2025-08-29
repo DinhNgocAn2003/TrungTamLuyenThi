@@ -23,15 +23,16 @@ import {
   Tabs,
   TextField,
   Typography,
-  Chip,
+  Avatar,
   List,
   ListItem,
   ListItemText,
   ListItemAvatar,
-  Avatar,
   ListItemSecondaryAction,
   Autocomplete,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -39,10 +40,11 @@ import ClassIcon from '@mui/icons-material/Class';
 import PeopleIcon from '@mui/icons-material/People';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import SchoolIcon from '@mui/icons-material/School';
-import BookIcon from '@mui/icons-material/Book';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import PublicIcon from '@mui/icons-material/Public';
+import PublicOffIcon from '@mui/icons-material/PublicOff';
 
 import { 
   getClasses, 
@@ -60,6 +62,8 @@ import {
   removeClassSchedule,
   getClassSchedules
 } from '../../services/supabase/database';
+import { setClassTeachers, addTeachersToClass } from '../../services/supabase/classes';
+import { getSubjectGradeCombinations, getTeachersForSubjectGrade } from '../../services/supabase/teacherAssignments';
 import { useLoading } from '../../contexts/LoadingContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import PageHeader from '../../components/common/PageHeader';
@@ -67,12 +71,18 @@ import PageHeader from '../../components/common/PageHeader';
 function ClassManagement() {
   const { setLoading } = useLoading();
   const { showNotification } = useNotification();
+  const theme = useTheme();
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
 
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [subjectGrades, setSubjectGrades] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [classTeachers, setClassTeachers] = useState([]);
+  const [filteredTeachers, setFilteredTeachers] = useState([]);
+  // classTeachers: danh sách giáo viên của lớp; setClassTeachersState tránh trùng tên hàm service setClassTeachers
+  const [classTeachers, setClassTeachersState] = useState([]);
   const [classSchedules, setClassSchedules] = useState([]);
+  const [selectedTeachers, setSelectedTeachers] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [enrollments, setEnrollments] = useState([]);
   const [openDialog, setOpenDialog] = useState(false);
@@ -84,14 +94,13 @@ function ClassManagement() {
   
   const [formData, setFormData] = useState({
     name: '',
-    subject_id: '',
-    level: '',
+    subjects_grades_id: null,
     description: '',
     fee: 0,
-    max_students: 20,
-    schedule: '',
-    is_active: true
+  is_active: true,
+  isPublic: true
   });
+  const [selectedSubjectGrade, setSelectedSubjectGrade] = useState(null);
 
   const [scheduleFormData, setScheduleFormData] = useState({
     day_of_week: '',
@@ -115,7 +124,34 @@ function ClassManagement() {
     fetchClasses();
     fetchSubjects();
     fetchTeachers();
+    fetchSubjectGrades();
   }, []);
+
+  const fetchSubjectGrades = async () => {
+    try {
+      const { data, error } = await getSubjectGradeCombinations();
+      if (error) throw error;
+      setSubjectGrades(data || []);
+    } catch (err) {
+      console.error('Error fetching subjects_grades:', err);
+      setSubjectGrades([]);
+    }
+  };
+
+  const fetchTeachersForSubjectGrade = async (subjectGradeId) => {
+    try {
+      if (!subjectGradeId) {
+        setFilteredTeachers([]);
+        return;
+      }
+      const { data, error } = await getTeachersForSubjectGrade(subjectGradeId);
+      if (error) throw error;
+      setFilteredTeachers(data || []);
+    } catch (err) {
+      console.error('Error fetching teachers for subjectGrade:', err);
+      setFilteredTeachers([]);
+    }
+  };
 
   const fetchClasses = async () => {
     setLoading(true);
@@ -171,7 +207,7 @@ function ClassManagement() {
       const { data: teacherData, error: teacherError } = await getClassTeachers(classId);
       if (teacherError) throw teacherError;
       
-      setClassTeachers(teacherData || []);
+  setClassTeachersState(teacherData || []);
 
       // Lấy lịch học của lớp
       const { data: scheduleData, error: scheduleError } = await getClassSchedules(classId);
@@ -198,20 +234,54 @@ function ClassManagement() {
 
   const handleOpenDialog = (classItem = null) => {
     if (classItem) {
-      setFormData({
-        ...classItem
-      });
+      // Chỉ lấy các field hợp lệ của bảng classes tránh đưa object subjects_grades gây lỗi
+      setFormData(prev => ({
+        id: classItem.id,
+        name: classItem.name || '',
+        subjects_grades_id: classItem.subjects_grades_id || null,
+        description: classItem.description || '',
+        fee: classItem.fee ?? 0,
+  is_active: classItem.is_active !== undefined ? classItem.is_active : true,
+  // accept either isPublic or isPublic from API
+  isPublic: classItem.isPublic !== undefined ? classItem.isPublic : (classItem.isPublic !== undefined ? classItem.isPublic : true)
+      }));
+      // preload selected teachers for editing (normalize to assignment objects)
+      (async () => {
+        try {
+          const { data: teacherData } = await getClassTeachers(classItem.id);
+          const normalized = (teacherData || []).map(t => ({
+            id: t.teacher_id || t.id,
+            teacher_id: t.teacher_id || t.id,
+            full_name: t.full_name || t.name || '',
+            email: t.email,
+            phone: t.phone,
+          })).filter(x => x.id != null);
+          setSelectedTeachers(normalized);
+        } catch (err) {
+          console.error('Error loading teachers:', err);
+          setSelectedTeachers([]);
+        }
+      })();
+      // preload selected subjects_grades if available
+      if (classItem.subjects_grades_id) {
+        const match = subjectGrades.find(sg => sg.id === classItem.subjects_grades_id);
+        if (match) {
+          setSelectedSubjectGrade(match);
+          setFormData(prev => ({ ...prev, subjects_grades_id: match.id }));
+          fetchTeachersForSubjectGrade(match.id);
+        }
+      }
     } else {
       setFormData({
         name: '',
-        subject_id: '',
-        level: '',
+        subjects_grades_id: null,
         description: '',
         fee: 0,
-        max_students: 20,
-        schedule: '',
-        is_active: true
+  is_active: true,
+  isPublic: true
       });
+      setSelectedTeachers([]);
+      setSelectedSubjectGrade(null);
     }
     setOpenDialog(true);
   };
@@ -267,35 +337,80 @@ function ClassManagement() {
     });
   };
 
-  const handleDateChange = (field, value) => {
-    // Remove date handling since we don't use dates anymore
-  };
-
   const handleSubmit = async () => {
     setLoading(true);
     try {
       // Kiểm tra dữ liệu nhập
-      if (!formData.name || !formData.subject_id || !formData.level) {
-        throw new Error("Vui lòng nhập đầy đủ thông tin bắt buộc");
+      if (!formData.name || !formData.subjects_grades_id) {
+        throw new Error("Vui lòng nhập đầy đủ thông tin bắt buộc (Tên lớp và Lớp học)");
       }
-
-      const classData = {
-        ...formData,
-        fee: Number(formData.fee),
-        max_students: Number(formData.max_students)
-      };
+  // Lưu ý: selectedTeachers chứa danh sách object giáo viên được chọn (có field id)
+      // Chỉ whitelist các cột thật của bảng để tránh gửi subjects_grades gây PGRST204
+  const allowed = ['name','subjects_grades_id','description','fee','is_active'];
+      const classData = {};
+      allowed.forEach(k => {
+        if (Object.prototype.hasOwnProperty.call(formData, k)) {
+          classData[k] = formData[k];
+        }
+      });
+  classData.fee = Number(classData.fee) || 0;
+  // map camelCase -> snake_case expected by DB
+  classData.isPublic = formData.isPublic;
       
       let result;
+      let classId;
       
-      if (formData.id) {
-        // Cập nhật lớp học
+  const isUpdate = !!formData.id;
+      if (isUpdate) {
         result = await updateClass(formData.id, classData);
+        if (result.error) throw result.error;
+        classId = formData.id;
       } else {
-        // Tạo lớp học mới
         result = await createClass(classData);
+        if (result.error) throw result.error;
+        if (result.data && result.data.length > 0) classId = result.data[0].id;
+        else if (result.data && result.data.id) classId = result.data.id;
+        else throw new Error('Không thể lấy ID lớp học mới tạo');
       }
-      
-      if (result.error) throw result.error;
+      // GÁN GIÁO VIÊN SAU KHI LỚP ĐÃ ĐƯỢC TẠO/CẬP NHẬT
+  if (classId && selectedTeachers.length > 0) {
+        try {
+          // Lọc ra các teacher_id hợp lệ
+          const teacherIds = selectedTeachers
+            .map(teacher => {
+              const derived = teacher.id || teacher.user_id || null;
+              return derived;
+            })
+            .filter(id => id !== null && id !== undefined);
+            console.log('teacherIds',teacherIds);
+          if (teacherIds.length > 0) {
+    // Nếu là tạo mới: chỉ thêm các giáo viên (không xóa gì vì chưa có)
+    // Nếu là cập nhật: replace-all hiện tại
+    const { error: assignError } = isUpdate
+      ? await setClassTeachers(classId, teacherIds)
+      : await addTeachersToClass(classId, teacherIds);
+            if (assignError) {
+              console.warn('Lỗi khi gán giáo viên:', assignError);
+              showNotification('Lớp đã được tạo nhưng có lỗi khi gán giáo viên: ' + assignError.message, 'warning');
+            }
+
+            // Fetch lại để xác nhận
+            try {
+              const { data: refreshedTeachers, error: refErr } = await getClassTeachers(classId);
+              if (refErr) {
+                console.warn('[TeacherFlow] Error when refreshing class teachers:', refErr);
+              } else {
+                setClassTeachersState(refreshedTeachers || []);
+              }
+            } catch (refCatch) {
+              console.warn('[TeacherFlow] Exception refreshing teachers:', refCatch);
+            }
+          }
+        } catch (teacherError) {
+          console.warn('Lỗi khi xử lý giáo viên:', teacherError);
+          showNotification('Lớp đã được tạo nhưng có lỗi khi gán giáo viên: ' + teacherError.message, 'warning');
+        }
+      }
       
       showNotification(
         formData.id ? 'Cập nhật lớp học thành công' : 'Thêm lớp học mới thành công',
@@ -306,10 +421,10 @@ function ClassManagement() {
       fetchClasses();
       
       // Nếu đang cập nhật lớp đang chọn, cập nhật thông tin
-      if (selectedClass && selectedClass.id === formData.id) {
-        fetchClassDetails(formData.id);
+      if (selectedClass && selectedClass.id === classId) {
+        fetchClassDetails(classId);
       }
-      
+
     } catch (error) {
       console.error('Error saving class:', error);
       showNotification('Lỗi khi lưu thông tin lớp học: ' + error.message, 'error');
@@ -346,7 +461,7 @@ function ClassManagement() {
     
     setLoading(true);
     try {
-      const { error } = await assignTeacher(selectedClass.id, selectedTeacher.id);
+      const { error } = await assignTeacher(selectedClass.id, selectedTeacher.user_id || selectedTeacher.teacher_user_id || selectedTeacher.id);
       if (error) throw error;
       
       showNotification('Thêm giáo viên vào lớp thành công', 'success');
@@ -421,12 +536,6 @@ function ClassManagement() {
     }
   };
 
-  // Tìm tên môn học từ ID
-  const getSubjectName = (subjectId) => {
-    const subject = subjects.find(s => s.id === subjectId);
-    return subject ? subject.name : 'Không xác định';
-  };
-
   // Chuyển đổi mã ngày thành tên
   const getDayName = (dayCode) => {
     const day = dayOptions.find(d => d.value === dayCode);
@@ -475,9 +584,9 @@ function ClassManagement() {
                     onClick={() => handleSelectClass(classItem)}
                   >
                     <CardContent>
-                      <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="h6">{classItem.name}</Typography>
-                        <Box>
+                      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' } }}>
+                        <Typography variant="h6" sx={{ wordBreak: 'break-word' }}>{classItem.name}</Typography>
+                        <Box sx={{ mt: { xs: 1, sm: 0 } }}>
                           <Switch
                             size="small"
                             checked={classItem.is_active}
@@ -500,13 +609,14 @@ function ClassManagement() {
                           />
                         </Box>
                       </Box>
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        Môn học: {getSubjectName(classItem.subject_id)}
-                      </Typography>
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        Lịch học: {classItem.schedule || 'Xem chi tiết'}
-                      </Typography>
-                      <Box display="flex" justifyContent="space-between">
+
+                      <Box sx={{ mt: 1, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, justifyContent: 'space-between' }}>
+                        <Typography variant="body2">
+                          Môn/Lớp: {subjectGrades.find(sg => sg.id === classItem.subjects_grades_id)?.display_name || 'Không xác định'}
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ mt: 1, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', gap: 2 }}>
                         <Typography variant="body2">
                           Học phí: {classItem.fee.toLocaleString('vi-VN')} VNĐ
                         </Typography>
@@ -519,6 +629,28 @@ function ClassManagement() {
                         >
                           {classItem.is_active ? 'Đang hoạt động' : 'Tạm dừng'}
                         </Typography>
+                        <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
+                          {/* Toggle công khai */}
+                          <IconButton
+                            size="small"
+                            color={(classItem.isPublic ?? classItem.isPublic) ? 'success' : 'default'}
+                            onClick={(e)=>{
+                              e.stopPropagation();
+                              const current = (classItem.isPublic ?? classItem.isPublic) === true;
+                              updateClass(classItem.id, { isPublic: !current })
+                                .then(()=>{
+                                  fetchClasses();
+                                  if(selectedClass?.id===classItem.id){
+                                    setSelectedClass({ ...classItem, isPublic: !current });
+                                  }
+                                })
+                                .catch(err=>showNotification('Lỗi khi cập nhật hiển thị: '+err.message,'error'));
+                            }}
+                            title={(classItem.isPublic ?? classItem.isPublic) ? 'Đang công khai (bấm để ẩn)' : 'Đang ẩn (bấm để công khai)'}
+                          >
+                            {(classItem.isPublic ?? classItem.isPublic) ? <PublicIcon fontSize="inherit" /> : <PublicOffIcon fontSize="inherit" />}
+                          </IconButton>
+                        </Box>
                       </Box>
                     </CardContent>
                   </Card>
@@ -570,27 +702,16 @@ function ClassManagement() {
               {tabValue === 0 && (
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle1" gutterBottom>Môn học</Typography>
+                    <Typography variant="subtitle1" gutterBottom>Môn / Lớp</Typography>
                     <Typography variant="body1" paragraph>
-                      {getSubjectName(selectedClass.subject_id)}
+                      {subjectGrades.find(sg => sg.id === selectedClass.subjects_grades_id)?.display_name || 'Không xác định'}
                     </Typography>
-                    
-                    <Typography variant="subtitle1" gutterBottom>Trình độ</Typography>
-                    <Typography variant="body1" paragraph>{selectedClass.level}</Typography>
                     
                     <Typography variant="subtitle1" gutterBottom>Học phí</Typography>
                     <Typography variant="body1" paragraph>{selectedClass.fee.toLocaleString('vi-VN')} VNĐ</Typography>
-                    
-                    <Typography variant="subtitle1" gutterBottom>Sĩ số tối đa</Typography>
-                    <Typography variant="body1" paragraph>{selectedClass.max_students} học sinh</Typography>
                   </Grid>
                   
-                  <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle1" gutterBottom>Ghi chú lịch học</Typography>
-                    <Typography variant="body1" paragraph>
-                      {selectedClass.schedule || 'Xem tab Lịch học'}
-                    </Typography>
-                    
+                  <Grid item xs={12} sm={6}>                    
                     <Typography variant="subtitle1" gutterBottom>Trạng thái</Typography>
                     <Typography 
                       variant="body1" 
@@ -598,6 +719,10 @@ function ClassManagement() {
                       sx={{ color: selectedClass.is_active ? 'success.main' : 'error.main', fontWeight: 'bold' }}
                     >
                       {selectedClass.is_active ? 'Đang hoạt động' : 'Tạm dừng'}
+                    </Typography>
+                    <Typography variant="subtitle1" gutterBottom>Hiển thị</Typography>
+                    <Typography variant="body1" paragraph>
+                      {(selectedClass.isPublic ?? selectedClass.isPublic) ? 'Công khai cho học sinh đăng ký' : 'Không hiển thị trong danh sách đăng ký'}
                     </Typography>
                   </Grid>
                   
@@ -615,7 +740,7 @@ function ClassManagement() {
                 <>
                   <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                     <Typography variant="h6">
-                      Danh sách học sinh ({enrollments.length}/{selectedClass.max_students})
+                      Danh sách học sinh ({enrollments.length})
                     </Typography>
                     <Button 
                       variant="outlined" 
@@ -635,7 +760,7 @@ function ClassManagement() {
                               {enrollment.students?.full_name || 'Học sinh'}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              Đăng ký: {dayjs(enrollment.enrolled_at).format('DD/MM/YYYY')}
+                              Đăng ký: {new Date(enrollment.enrolled_at).toLocaleDateString('vi-VN')}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
                               Trạng thái: {enrollment.status === 'active' ? 'Đang học' : 'Đã nghỉ'}
@@ -657,7 +782,7 @@ function ClassManagement() {
                 <>
                   <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                     <Typography variant="h6">
-                      Giáo viên đứng lớp
+                      Giáo viên đứng lớp ({classTeachers.length})
                     </Typography>
                     <Button 
                       variant="contained" 
@@ -680,7 +805,7 @@ function ClassManagement() {
                           </ListItemAvatar>
                           <ListItemText
                             primary={teacher.full_name}
-                            secondary={`Email: ${teacher.email} - SĐT: ${teacher.phone || 'Chưa cập nhật'}`}
+                            secondary={`Email: ${teacher.email??'Chưa cập nhật'} - SĐT: ${teacher.phone ?? 'Chưa cập nhật'}`}
                           />
                           <ListItemSecondaryAction>
                             <IconButton 
@@ -757,15 +882,6 @@ function ClassManagement() {
                       Chưa có lịch học nào được thiết lập. Vui lòng thêm lịch học.
                     </Typography>
                   )}
-
-                  {selectedClass.schedule && (
-                    <Box mt={3}>
-                      <Typography variant="subtitle1" gutterBottom>Ghi chú lịch học</Typography>
-                      <Typography variant="body1" paragraph>
-                        {selectedClass.schedule}
-                      </Typography>
-                    </Box>
-                  )}
                 </>
               )}
             </Paper>
@@ -784,7 +900,7 @@ function ClassManagement() {
       </Grid>
       
       {/* Dialog thêm/sửa lớp học */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth fullScreen={isSmallScreen}>
         <DialogTitle>
           {formData.id ? 'Cập nhật thông tin lớp học' : 'Thêm lớp học mới'}
         </DialogTitle>
@@ -802,40 +918,23 @@ function ClassManagement() {
               />
             </Grid>
             
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="normal" required>
-                <InputLabel id="subject-label">Môn học</InputLabel>
-                <Select
-                  labelId="subject-label"
-                  name="subject_id"
-                  value={formData.subject_id}
-                  onChange={handleInputChange}
-                  label="Môn học"
-                >
-                  {subjects.map((subject) => (
-                    <MenuItem key={subject.id} value={subject.id}>
-                      {subject.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="normal">
-                <InputLabel id="level-label">Trình độ</InputLabel>
-                <Select
-                  labelId="level-label"
-                  name="level"
-                  value={formData.level}
-                  onChange={handleInputChange}
-                  label="Trình độ"
-                >
-                  <MenuItem value="Cơ bản">Cơ bản</MenuItem>
-                  <MenuItem value="Trung bình">Trung bình</MenuItem>
-                  <MenuItem value="Nâng cao">Nâng cao</MenuItem>
-                </Select>
-              </FormControl>
+            <Grid item xs={12}>
+              <Autocomplete
+                options={subjectGrades}
+                getOptionLabel={(option) => option.display_name || option.name || ''}
+                value={selectedSubjectGrade}
+                onChange={(e, newVal) => {
+                  setSelectedSubjectGrade(newVal);
+                  if (newVal) {
+                    setFormData({ ...formData, subjects_grades_id: newVal.id });
+                    fetchTeachersForSubjectGrade(newVal.id);
+                  } else {
+                    setFormData({ ...formData, subjects_grades_id: null });
+                    setFilteredTeachers([]);
+                  }
+                }}
+                renderInput={(params) => <TextField {...params} label="Lớp học" margin="normal" required />}
+              />
             </Grid>
             
             <Grid item xs={12} sm={6}>
@@ -852,28 +951,16 @@ function ClassManagement() {
             </Grid>
             
             <Grid item xs={12} sm={6}>
-              <TextField
-                name="schedule"
-                label="Ghi chú lịch học"
-                fullWidth
-                value={formData.schedule}
-                onChange={handleInputChange}
-                margin="normal"
-                placeholder="Ví dụ: Thứ 2, 4, 6 - 18:00-20:00"
-                helperText="Lịch học chi tiết có thể thêm sau"
-              />
-            </Grid>
-            
-            <Grid item xs={12} sm={6}>
-              <TextField
-                name="max_students"
-                label="Sĩ số tối đa"
-                fullWidth
-                type="number"
-                value={formData.max_students}
-                onChange={handleInputChange}
-                margin="normal"
-                required
+              <Autocomplete
+                multiple
+                options={filteredTeachers.length > 0 ? filteredTeachers : []}
+                getOptionLabel={(option) => option.full_name || option.email}
+                value={selectedTeachers}
+                onChange={(e, newValue) => setSelectedTeachers(newValue)}
+                disabled={!selectedSubjectGrade}
+                renderInput={(params) => (
+                  <TextField {...params} label={selectedSubjectGrade ? "Giáo viên (chọn nhiều)" : "Chọn Lớp học trước"} margin="normal" fullWidth />
+                )}
               />
             </Grid>
             
@@ -903,6 +990,19 @@ function ClassManagement() {
                 label="Lớp học đang hoạt động"
               />
             </Grid>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    name="isPublic"
+                    checked={formData.isPublic}
+                    onChange={handleInputChange}
+                    color="secondary"
+                  />
+                }
+                label="Lớp học công khai (hiển thị cho học sinh đăng ký)"
+              />
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -914,12 +1014,12 @@ function ClassManagement() {
       </Dialog>
       
       {/* Dialog thêm giáo viên */}
-      <Dialog open={teacherDialog} onClose={handleCloseTeacherDialog} maxWidth="sm" fullWidth>
+      <Dialog open={teacherDialog} onClose={handleCloseTeacherDialog} maxWidth="sm" fullWidth fullScreen={isSmallScreen}>
         <DialogTitle>Thêm giáo viên vào lớp</DialogTitle>
         <DialogContent dividers>
           <Autocomplete
             options={teachers}
-            getOptionLabel={(option) => `${option.full_name} (${option.email})`}
+            getOptionLabel={(option) => `${option.full_name} (${option.email || 'Chưa cập nhật'})`}
             onChange={(event, newValue) => {
               setSelectedTeacher(newValue);
             }}
@@ -943,7 +1043,7 @@ function ClassManagement() {
       </Dialog>
       
       {/* Dialog thêm lịch học */}
-      <Dialog open={scheduleDialog} onClose={handleCloseScheduleDialog} maxWidth="sm" fullWidth>
+      <Dialog open={scheduleDialog} onClose={handleCloseScheduleDialog} maxWidth="sm" fullWidth fullScreen={isSmallScreen}>
         <DialogTitle>Thêm lịch học</DialogTitle>
         <DialogContent dividers>
           <FormControl fullWidth margin="normal" required>

@@ -251,3 +251,27 @@ export const createSubjectGradeCombination = async (subjectId, gradeId, name, de
     return { data: null, error };
   }
 };
+
+// Lấy danh sách giáo viên phù hợp với một subjects_grades_id
+export const getTeachersForSubjectGrade = async (subjectGradeId) => {
+  try {
+    const { data, error } = await supabase
+      .from('teacher_subjects_grades')
+      .select(`
+        teacher:teachers(*)
+      `)
+      .eq('subject_grade_id', subjectGradeId);
+
+    if (error) {
+      console.error('Error fetching teachers for subjectGrade:', error);
+      return { data: [], error };
+    }
+
+    // flatten to teacher objects
+    const teachers = (data || []).map(r => r.teacher).filter(Boolean);
+    return { data: teachers, error: null };
+  } catch (error) {
+    console.error('Error in getTeachersForSubjectGrade:', error);
+    return { data: [], error };
+  }
+};

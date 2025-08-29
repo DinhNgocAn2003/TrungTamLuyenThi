@@ -245,11 +245,10 @@ function UserLayout() {
     <Box sx={{ 
       display: 'flex',
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #4caf50 0%, #388e3c 50%, #2e7d32 100%)',
       bgcolor: 'background.default',
-      overflow: 'hidden', // Ngăn overflow
+      overflow: 'hidden',
       width: '100%',
-      maxWidth: '100vw' // Đảm bảo không vượt quá viewport width
+      maxWidth: '100vw'
     }}>
       {/* Modern AppBar with Glass Effect */}
       <AppBar 
@@ -805,7 +804,7 @@ function UserLayout() {
                 Đang tải thông tin học sinh...
               </Typography>
             </Box>
-          ) : student?.id ? (
+          ) : student?.user_id ? (
             <Box display="flex" flexDirection="column" alignItems="center" gap={2}>
               <Paper
                 elevation={3}
@@ -818,7 +817,7 @@ function UserLayout() {
                 }}
               >
                 <QRCode 
-                  value={student.id} 
+                  value={student.user_id} 
                   size={200}
                   level="H"
                   includeMargin
@@ -834,7 +833,7 @@ function UserLayout() {
                   {student.full_name}
                 </Typography>
                 <Chip
-                  label={`Mã học sinh: ${student.id}`}
+                  label={`Mã học sinh: ${student.user_id}`}
                   color="primary"
                   variant="outlined"
                   sx={{ 
