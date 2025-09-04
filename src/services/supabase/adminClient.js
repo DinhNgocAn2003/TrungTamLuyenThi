@@ -12,13 +12,18 @@ const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY;
 // console.log('Service Key exists:', !!supabaseServiceKey);
 // console.log('Service Key length:', supabaseServiceKey?.length);
 
-// Use service key for admin operations (bypasses RLS)
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-});
+// Use service key for admin operations (bypasses RLS) - DO NOT expose service key in production frontend
+// If service key is missing, fall back to anon client and warn (queries will be limited by RLS)
+export const supabaseAdmin = supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    })
+  : (() => {
+      console.warn('[supabaseAdmin] VITE_SUPABASE_SERVICE_KEY missing. Falling back to anon key. Ensure RLS policies allow required access.');
+      return createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: true, persistSession: true }
+      });
+    })();
 
 // Regular client for normal operations
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

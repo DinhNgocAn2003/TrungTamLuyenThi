@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -10,28 +10,7 @@ import { LoadingProvider } from './contexts/LoadingContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import LoadingBackdrop from './components/common/LoadingBackdrop';
 import NotificationSnackbar from './components/common/NotificationSnackbar';
-
-// Import các component trang
-import AdminLayout from './layouts/AdminLayout';
-import UserLayout from './layouts/UserLayout';
-import Login from './pages/auth/Login';
-import ResetPassword from './pages/auth/ResetPassword';
-import ForgotPassword from './pages/auth/ForgotPassword';
-import Dashboard from './pages/admin/Dashboard';
-import Classes from './pages/admin/ClassManagement';
-import Students from './pages/admin/StudentManagement';
-import Teachers from './pages/admin/TeacherManagement';
-import Payments from './pages/admin/Payments';
-import Reports from './pages/admin/Reports';
-import UserManagement from './pages/admin/UserManagement';
-import UserDashboard from './pages/user/UserDashboard';
-import UserClasses from './pages/user/ClassRegistration';
-import UserAttendance from './pages/user/UserAttendance';
-import ChangePassword from './pages/auth/ChangePassword';
-import UserPayments from './pages/user/UserPayments';
-// import UserGrades from './pages/user/Grades';
-// import UserProfile from './pages/user/Profile';
-import NotFound from './pages/NotFound';
+import AppRoutes from './routes/AppRoutes';
 
 // Create a theme instance
 const theme = createTheme({
@@ -71,74 +50,7 @@ function App() {
           <LoadingProvider>
             <NotificationProvider>
               <AuthProvider>
-                <Routes>
-                  {/* Public Routes */}
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/reset-password" element={<ResetPassword />} />
-                  <Route path='/forgot-password'element={<ForgotPassword />} />
-                  <Route path="change-password" element={<ChangePassword />} />                 
-
-                  {/* Protected Admin Routes */}
-                  <Route 
-                    path="/admin" 
-                    element={
-                      <AdminLayout />
-                    }
-                  >
-                    <Route index path="dashboard" element={<Dashboard />} />
-                    <Route path="students" element={<Students />} />
-                    <Route path="teachers" element={<Teachers />} />
-                    <Route path="classes" element={<Classes />} />
-                    <Route path="payments" element={<Payments />} />
-                    <Route path="reports" element={<Reports />} />
-                    <Route path="users" element={<UserManagement />} />
-                  </Route>
-
-                  {/* Protected Student Routes */}
-                  <Route 
-                    path="/student" 
-                    element={
-                      <UserLayout />
-                    }
-                  >
-                    <Route index element={<Navigate to="/student/dashboard" replace />} />
-                    <Route path="dashboard" element={<UserDashboard />} />
-                    <Route path="classes" element={<UserClasses />} />
-                    <Route path="attendance" element={<UserAttendance />} />
-                    <Route path="payments" element={<UserPayments />} />
-                  </Route>
-
-                  {/* Protected Teacher Routes */}
-                  <Route 
-                    path="/teacher" 
-                    element={
-                      <UserLayout />
-                    }
-                  >
-                    <Route index element={<Navigate to="/teacher/dashboard" replace />} />
-                    <Route path="dashboard" element={<UserDashboard />} />
-                    <Route path="classes" element={<UserClasses />} />
-                    <Route path="attendance" element={<UserAttendance />} />
-                    <Route path="payments" element={<UserPayments />} />
-                  </Route>
-
-                  {/* Legacy User Routes - redirect to role-specific routes */}
-                  <Route 
-                    path="/user/*" 
-                    element={<Navigate to="/login" replace />}
-                  />
-
-                  {/* Redirects based on auth status */}
-                  <Route 
-                    path="/" 
-                    element={
-                      <Navigate to="/login" replace />
-                    } 
-                  />
-
-                  {/* 404 Page */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+                <AppRoutes />
                 <LoadingBackdrop />
                 <NotificationSnackbar />
               </AuthProvider>

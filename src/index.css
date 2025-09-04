@@ -19,6 +19,35 @@ html, body {
   max-width: 100vw; /* Không vượt quá viewport */
 }
 
+/* Thin scrollbar (modern browsers) */
+html, body, * {
+  scrollbar-width: thin;              /* Firefox */
+  scrollbar-color: #9fb4c8 transparent;
+}
+
+/* WebKit (Chrome, Edge, Safari) apply to every scrollable element */
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 2px 0; /* shrink track visually */
+}
+*::-webkit-scrollbar-thumb {
+  background: #9fb4c8;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #88a6bc;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* Optional: smoother feel on Windows */
+@supports (scrollbar-gutter: stable) {
+  html { scrollbar-gutter: stable both-edges; }
+}
+
 #root {
   width: 100%;
   max-width: 100vw;

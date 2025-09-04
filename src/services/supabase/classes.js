@@ -1,61 +1,60 @@
 import { supabase } from './client';
 import { supabaseAdmin } from './adminClient';
 
+// Internal mapper: normalize a class row (with nested subjects_grades -> subject) to provide
+// backward compatible `subject` object plus convenience fields subject_name, combination_name.
+const mapClassRow = (row) => {
+  if (!row) return row;
+  const subjectName = row.subjects_grades?.subject?.name || null;
+  const combinationName = row.subjects_grades?.name || null;
+  return {
+    ...row,
+    subject: subjectName ? { name: subjectName } : null,
+    subject_name: subjectName,
+    combination_name: combinationName
+  };
+};
+
 // ----- CLASSES -----
 export const getClasses = async () => {
-  // Use admin client for admin operations to bypass RLS
-  const { data, error } = await supabaseAdmin
-    .from('classes')
-    .select('*');
-  
-  return { data, error };
+  // Slim select: only fields used in UI + relation chain subjects_grades -> subject
+  // Provide backward-compatible subject object
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('classes')
+      .select(`
+        id,name,fee,description,is_active,isPublic,subjects_grades_id,
+        subjects_grades:subjects_grades(
+          id,grade_id,subject_id,name,description,
+          subject:subject_id(id,name,description)
+        )
+      `)
+      .order('id', { ascending: true });
+    if (error) throw error;
+  const mapped = (data||[]).map(mapClassRow);
+    return { data: mapped, error: null };
+  } catch (error) {
+    console.error('Error getClasses slim:', error);
+    return { data: null, error };
+  }
 };
 
 export const getClassById = async (id) => {
   try {
     const { data: cls, error } = await supabase
       .from('classes')
-      .select('*')
+      .select(`
+        id,name,fee,description,is_active,isPublic,subjects_grades_id,
+        subjects_grades:subjects_grades(
+          id,grade_id,subject_id,name,description,
+          subject:subject_id(id,name,description)
+        )
+      `)
       .eq('id', id)
       .maybeSingle();
-
     if (error) return { data: null, error };
-
     if (!cls) return { data: null, error: null };
-
-    // Try to attach subjects_grades if the class references it
-    try {
-      if (cls.subjects_grades_id) {
-        const { data: sg, error: sgErr } = await supabase
-          .from('subjects_grades')
-          .select('*')
-          .eq('id', cls.subjects_grades_id)
-          .maybeSingle();
-
-        if (!sgErr) {
-          // attach as subjects_grades for backward compatibility
-          return { data: { ...cls, subjects_grades: sg }, error: null };
-        }
-      }
-
-      // Fallback: if class references subject_id (legacy), fetch subject
-      if (cls.subject_id) {
-        const { data: subject, error: sErr } = await supabase
-          .from('subjects')
-          .select('*')
-          .eq('id', cls.subject_id)
-          .maybeSingle();
-
-        if (!sErr) {
-          return { data: { ...cls, subject }, error: null };
-        }
-      }
-    } catch (innerErr) {
-      // ignore and return class only
-      console.warn('Could not fetch related subject(s):', innerErr);
-    }
-
-    return { data: cls, error: null };
+    return { data: mapClassRow(cls), error: null };
   } catch (err) {
     return { data: null, error: err };
   }
@@ -63,23 +62,21 @@ export const getClassById = async (id) => {
 
 export const getOpenClasses = async () => {
   try {
-    // Fetch active classes and include subjects_grades relation (if FK exists: classes.subjects_grades_id -> subjects_grades.id)
+    // Fetch only necessary fields (avoid select('*')) to reduce payload
+  // Fields needed in UI: id, name, fee, description, max_students, is_active, isPublic, schedule (if exists), subjects_grades.name + nested subject.name
     const { data, error } = await supabase
       .from('classes')
-      .select(`
-        *,
-        subjects_grades:subjects_grades(*)
-      `)
+	.select(`
+  id,name,fee,description,is_active,isPublic,subjects_grades_id,
+  subjects_grades:subjects_grades(id,name,grade_id,subject_id,subject:subject_id(id,name,description))
+    `)
       .eq('is_active', true)
       .order('id', { ascending: true });
 
     if (error) throw error;
 
     // Backward compatibility mapping: provide subject object so existing UI using classItem.subject?.name doesn't break
-    const mapped = (data || []).map(row => ({
-      ...row,
-      subject: row.subjects_grades ? { name: row.subjects_grades.display_name || row.subjects_grades.name || '' } : null
-    }));
+  const mapped = (data || []).map(mapClassRow);
 
     return { data: mapped, error: null };
   } catch (error) {
@@ -134,6 +131,22 @@ export const getEnrollments = async (classId = null, studentId = null) => {
   
   const { data, error } = await query;
   return { data, error };
+};
+
+// Alias focused fetch: active enrollments of a single class with student detail (admin/teacher use)
+export const getClassEnrollments = async (classId) => {
+  if (!classId) return { data: [], error: null };
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('class_enrollments')
+      .select('id, student_id, class_id, status, enrolled_at, students(*)')
+      .eq('class_id', classId);
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error getClassEnrollments:', error);
+    return { data: [], error };
+  }
 };
 
 export const addClassSchedule = async (classId, scheduleData) => {
@@ -258,6 +271,22 @@ export const getClassSchedules = async (classId) => {
   }
 };
 
+// Fetch subjects_grades rows (with nested subject) by IDs (admin bypass RLS) for enrichment
+export const getSubjectsGradesByIds = async (ids = []) => {
+  if (!Array.isArray(ids) || ids.length === 0) return { data: [], error: null };
+  try {
+    const { data, error } = await supabaseAdmin
+  .from('subjects_grades')
+	.select(`id,grade_id,subject_id,name,subject:subject_id(id,name)`) // minimal fields
+      .in('id', ids);
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching subjects_grades by ids:', error);
+    return { data: [], error };
+  }
+};
+
 // Bulk fetch schedules for many classes (conflict checking)
 export const getSchedulesForClasses = async (classIds = []) => {
   if (!Array.isArray(classIds) || classIds.length === 0) {
@@ -291,7 +320,7 @@ export const setClassTeachers = async (classId, teacherAssignments = []) => {
       .delete()
       .eq('class_id', classId);
 
-    if (delErr) throw delErr;
+  if (delErr) throw delErr;
 
     // Insert new simple rows (class_id, teacher_id) and return inserted rows for debugging
     let inserted = null;

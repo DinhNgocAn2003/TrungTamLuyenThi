@@ -1,543 +1,202 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Box,
-  Grid,
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  Chip,
-  Avatar,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Paper,
-  Divider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Checkbox,
-  FormControlLabel,
-  TextField,
-  Alert,
-  CircularProgress,
-  IconButton,
-  Fab
+  Box, Grid, Card, CardContent, Typography, Button, Chip, Avatar, List, ListItem, ListItemAvatar, ListItemText,
+  Dialog, DialogTitle, DialogContent, DialogActions, Paper, Divider, FormControl, InputLabel, Select, MenuItem,
+  Checkbox, FormControlLabel, TextField, Alert, CircularProgress, IconButton
 } from '@mui/material';
 import {
-  EventNote as EventNoteIcon,
-  Class as ClassIcon,
-  People as PeopleIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  Save as SaveIcon,
-  QrCodeScanner as QrCodeScannerIcon,
-  DateRange as DateRangeIcon,
-  Close as CloseIcon
+  EventNote as EventNoteIcon, Class as ClassIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon,
+  Save as SaveIcon, QrCodeScanner as QrCodeScannerIcon, Close as CloseIcon
 } from '@mui/icons-material';
-
-// Data will be loaded from API
-const mockClasses = [];
-const mockStudents = {};
+import dayjs from 'dayjs';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+import { useAuth } from '../../contexts/AuthContext';
+import { useLoading } from '../../contexts/LoadingContext';
+import { useNotification } from '../../contexts/NotificationContext';
+import { getClassEnrollments, getAttendanceByDate, markAttendance, updateAttendance } from '../../services/supabase/database';
+import { getTeacherByUserId, getClassesForTeacher } from '../../services/supabase/teachers';
 
 function TeacherAttendance() {
-  const [selectedClass, setSelectedClass] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const { user } = useAuth();
+  const { setLoading } = useLoading();
+  const { showNotification } = useNotification();
+  const [classes, setClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(dayjs());
   const [students, setStudents] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [attendanceDialog, setAttendanceDialog] = useState(false);
-  const [qrScanDialog, setQrScanDialog] = useState(false);
+  const [qrDialog, setQrDialog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState('');
+  const [hasChanges, setHasChanges] = useState(false);
+  const [scannedStudentId, setScannedStudentId] = useState(null);
+  const qrRef = useRef(null);
+  const [scanner, setScanner] = useState(null);
 
-  useEffect(() => {
-    if (selectedClass) {
-      setStudents(mockStudents[selectedClass] || []);
-    } else {
-      setStudents([]);
-    }
-  }, [selectedClass]);
+  useEffect(() => { fetchClasses(); }, []);
+  useEffect(() => { if (selectedClass) fetchAttendance(); }, [selectedClass, selectedDate]);
+  useEffect(() => () => { if (scanner) scanner.clear(); }, [scanner]);
 
-  const handleAttendanceChange = (studentId, present) => {
-    setStudents(prev => 
-      prev.map(student => 
-        student.id === studentId 
-          ? { ...student, present }
-          : student
-      )
-    );
+  const fetchClasses = async () => {
+    setLoading(true);
+    try {
+      if (!user?.id) return;
+  const { data: teacherRow } = await getTeacherByUserId(user.id);
+  if (!teacherRow?.id) { setClasses([]); setSelectedClass(null); return; }
+  const { data: tClasses } = await getClassesForTeacher(teacherRow.id, { includeStudents: false });
+      const active = (tClasses || []).filter(c => c.is_active);
+      setClasses(active);
+      setSelectedClass(active[0] || null);
+    } catch (e) {
+      showNotification('Lỗi tải lớp: ' + e.message, 'error');
+    } finally { setLoading(false); }
   };
 
-  const handleSaveAttendance = async () => {
+  const fetchAttendance = async () => {
+    if (!selectedClass?.id) return;
+    setLoading(true);
+    try {
+      const [{ data: enrollments, error: enrErr }, { data: attData, error: attErr }] = await Promise.all([
+        getClassEnrollments(selectedClass.id),
+        getAttendanceByDate(selectedClass.id, selectedDate.format('YYYY-MM-DD'))
+      ]);
+      if (enrErr) throw enrErr;
+      if (attErr) throw attErr;
+      const studentsList = (enrollments || []).map(e => e.students).filter(Boolean);
+      setStudents(studentsList);
+      const attMap = (attData || []).reduce((m, r) => { m[r.student_id] = r; return m; }, {});
+      setAttendanceRecords(studentsList.map(s => ({
+        student_id: s.id,
+        name: s.full_name,
+        present: attMap[s.id]?.status ?? null,
+        attendance_id: attMap[s.id]?.id || null,
+        notes: attMap[s.id]?.notes || ''
+      })));
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  const togglePresent = (sid) => {
+    setAttendanceRecords(prev => prev.map(r => r.student_id === sid ? { ...r, present: r.present === true ? false : true } : r));
+    setHasChanges(true);
+  };
+  const changeNotes = (sid, v) => { setAttendanceRecords(p => p.map(r => r.student_id === sid ? { ...r, notes: v } : r)); setHasChanges(true); };
+  const markAll = () => { setAttendanceRecords(p => p.map(r => ({ ...r, present: true }))); setHasChanges(true); };
+
+  const save = async () => {
     setSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      console.log('Saving attendance:', {
-        classId: selectedClass,
-        date: selectedDate,
-        students: students,
-        notes: notes
+      const tasks = attendanceRecords.filter(r => r.present !== null).map(r => {
+        const payload = { student_id: r.student_id, class_id: selectedClass.id, date: selectedDate.format('YYYY-MM-DD'), status: r.present, notes: r.notes };
+        return r.attendance_id ? updateAttendance(r.attendance_id, payload) : markAttendance(payload);
       });
-      
-      setAttendanceDialog(false);
-      // Show success notification here
-    } catch (error) {
-      console.error('Error saving attendance:', error);
-    } finally {
-      setSaving(false);
-    }
+      await Promise.all(tasks);
+      showNotification('Đã lưu điểm danh', 'success');
+      setHasChanges(false);
+      fetchAttendance();
+    } catch (e) { showNotification('Lỗi lưu: ' + e.message, 'error'); }
+    finally { setSaving(false); }
   };
 
-  const getPresentCount = () => students.filter(s => s.present).length;
-  const getAbsentCount = () => students.filter(s => !s.present).length;
-  const getAttendanceRate = () => {
-    if (students.length === 0) return 0;
-    return Math.round((getPresentCount() / students.length) * 100);
-  };
+  const presentCount = attendanceRecords.filter(r => r.present === true).length;
+  const total = attendanceRecords.length;
+  const absentCount = attendanceRecords.filter(r => r.present === false).length;
+  const rate = total ? Math.round((presentCount / total) * 100) : 0;
 
-  const handleOpenAttendance = () => {
-    if (!selectedClass) {
-      alert('Vui lòng chọn lớp học');
-      return;
-    }
-    setAttendanceDialog(true);
+  const openQr = () => {
+    setQrDialog(true); setScannedStudentId(null);
+    setTimeout(() => {
+      if (qrRef.current) {
+        const inst = new Html5QrcodeScanner('teacher-qr', { fps: 10, qrbox: 230 });
+        inst.render((text)=> handleQrScan(text), ()=>{});
+        setScanner(inst);
+      }
+    }, 400);
   };
+  const closeQr = () => { if (scanner) scanner.clear(); setQrDialog(false); };
 
-  const handleQrScan = () => {
-    setQrScanDialog(true);
-  };
-
-  const mockQrScanResult = (studentId) => {
-    // Simulate QR scan result
-    const student = students.find(s => s.student_id === studentId);
-    if (student) {
-      handleAttendanceChange(student.id, true);
-      return true;
-    }
-    return false;
+  const handleQrScan = (decoded) => {
+    const rec = attendanceRecords.find(r => r.student_id.toString() === decoded.toString());
+    if (!rec) { showNotification('Không tìm thấy học sinh trong lớp', 'warning'); return; }
+    togglePresent(rec.student_id);
+    setScannedStudentId(rec.student_id);
+    showNotification('Đã điểm danh: ' + rec.name, 'success');
   };
 
   return (
     <Box>
-      {/* Header */}
-      <Box mb={4}>
-        <Typography variant="h4" fontWeight="bold" color="white" gutterBottom>
-          Điểm danh học sinh 📋
-        </Typography>
-        <Typography variant="h6" color="rgba(255,255,255,0.8)">
-          Quản lý điểm danh cho các lớp học của bạn
-        </Typography>
-      </Box>
-
-      {/* Controls */}
-      <Paper
-        elevation={0}
-        sx={{
-          background: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(20px)',
-          borderRadius: '20px',
-          border: '1px solid rgba(255, 255, 255, 0.3)',
-          p: 3,
-          mb: 3
-        }}
-      >
-        <Grid container spacing={3} alignItems="center">
+      <Typography variant="h5" mb={2}>Điểm danh lớp học</Typography>
+      <Paper sx={{ p:2, mb:3 }}>
+        <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>Chọn lớp học</InputLabel>
-              <Select
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-                label="Chọn lớp học"
-              >
-                {mockClasses.map((cls) => (
-                  <MenuItem key={cls.id} value={cls.id}>
-                    {cls.name} ({cls.students} học sinh)
-                  </MenuItem>
-                ))}
+            <FormControl fullWidth size="small">
+              <InputLabel>Lớp</InputLabel>
+              <Select value={selectedClass?.id||''} label="Lớp" onChange={(e)=>{const c=classes.find(cl=>cl.id===e.target.value);setSelectedClass(c);}}>
+                {classes.map(c=> <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
               </Select>
             </FormControl>
           </Grid>
-          
           <Grid item xs={12} md={3}>
-            <TextField
-              fullWidth
-              type="date"
-              label="Ngày điểm danh"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              InputLabelProps={{
-                shrink: true,
-              }}
-            />
+            <TextField type="date" fullWidth size="small" label="Ngày" InputLabelProps={{shrink:true}} value={selectedDate.format('YYYY-MM-DD')} onChange={e=>setSelectedDate(dayjs(e.target.value))} />
           </Grid>
-
-          <Grid item xs={12} md={5}>
-            <Box display="flex" gap={2}>
-              <Button
-                variant="contained"
-                startIcon={<EventNoteIcon />}
-                onClick={handleOpenAttendance}
-                disabled={!selectedClass}
-                sx={{ borderRadius: '10px', textTransform: 'none' }}
-              >
-                Điểm danh thủ công
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<QrCodeScannerIcon />}
-                onClick={handleQrScan}
-                disabled={!selectedClass}
-                sx={{ borderRadius: '10px', textTransform: 'none' }}
-              >
-                Quét QR
-              </Button>
-            </Box>
+          <Grid item xs={12} md={5} display="flex" gap={1}>
+            <Button variant="contained" disabled={!selectedClass} onClick={()=>setAttendanceDialog(true)}>Điểm danh</Button>
+            <Button variant="outlined" disabled={!selectedClass} onClick={openQr} startIcon={<QrCodeScannerIcon/>}>QR</Button>
+            <Button variant="contained" color="success" disabled={!hasChanges} onClick={save} startIcon={<Save as SaveIcon/>}>Lưu</Button>
           </Grid>
         </Grid>
       </Paper>
-
-      {/* Current Class Info */}
       {selectedClass && (
-        <Grid container spacing={3} mb={3}>
-          <Grid item xs={12} md={4}>
-            <Card
-              elevation={0}
-              sx={{
-                background: 'rgba(255, 255, 255, 0.9)',
-                backdropFilter: 'blur(20px)',
-                borderRadius: '15px',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-              }}
-            >
-              <CardContent>
-                <Box display="flex" alignItems="center" mb={2}>
-                  <Avatar sx={{ bgcolor: 'primary.light', mr: 2 }}>
-                    <ClassIcon />
-                  </Avatar>
-                  <Typography variant="h6" fontWeight="bold">
-                    {mockClasses.find(c => c.id === parseInt(selectedClass))?.name}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Tổng số học sinh: {students.length}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Card
-              elevation={0}
-              sx={{
-                background: 'rgba(255, 255, 255, 0.9)',
-                backdropFilter: 'blur(20px)',
-                borderRadius: '15px',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-              }}
-            >
-              <CardContent>
-                <Box display="flex" alignItems="center" mb={2}>
-                  <Avatar sx={{ bgcolor: 'success.light', mr: 2 }}>
-                    <CheckCircleIcon />
-                  </Avatar>
-                  <Typography variant="h6" fontWeight="bold">
-                    Có mặt: {getPresentCount()}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Tỷ lệ: {getAttendanceRate()}%
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-
-          <Grid item xs={12} md={4}>
-            <Card
-              elevation={0}
-              sx={{
-                background: 'rgba(255, 255, 255, 0.9)',
-                backdropFilter: 'blur(20px)',
-                borderRadius: '15px',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-              }}
-            >
-              <CardContent>
-                <Box display="flex" alignItems="center" mb={2}>
-                  <Avatar sx={{ bgcolor: 'error.light', mr: 2 }}>
-                    <CancelIcon />
-                  </Avatar>
-                  <Typography variant="h6" fontWeight="bold">
-                    Vắng mặt: {getAbsentCount()}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Cần theo dõi
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-      )}
-
-      {/* Student List */}
-      {students.length > 0 && (
-        <Paper
-          elevation={0}
-          sx={{
-            background: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(20px)',
-            borderRadius: '20px',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            p: 3
-          }}
-        >
-          <Typography variant="h6" fontWeight="bold" mb={2}>
-            Danh sách học sinh
-          </Typography>
+        <Grid container spacing={2} mb={3}>
+          <Grid item xs={12} md={4}><Card><CardContent><Typography>Tổng học sinh: {total}</Typography></CardContent></Card></Grid>
+          <Grid item xs={12} md={4}><Card><CardContent><Typography>Có mặt: {presentCount}</Typography></CardContent></Card></Grid>
+          <Grid item xs={12} md={4}><Card><CardContent><Typography>Tỷ lệ: {rate}%</Typography></CardContent></Card></Grid>
+        </Grid>) }
+      {attendanceRecords.length>0 && (
+        <Paper sx={{p:2}}>
+          <Typography variant="subtitle1" mb={1}>Danh sách</Typography>
           <List>
-            {students.map((student, index) => (
-              <React.Fragment key={student.id}>
-                <ListItem
-                  sx={{
-                    borderRadius: '10px',
-                    '&:hover': { bgcolor: 'grey.50' }
-                  }}
-                >
-                  <ListItemAvatar>
-                    <Avatar 
-                      sx={{ 
-                        bgcolor: student.present ? 'success.light' : 'error.light' 
-                      }}
-                    >
-                      {student.present ? <CheckCircleIcon /> : <CancelIcon />}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={
-                      <Typography variant="subtitle1" fontWeight="600">
-                        {student.name}
-                      </Typography>
-                    }
-                    secondary={
-                      <Typography variant="body2" color="text.secondary">
-                        Mã học sinh: {student.student_id}
-                      </Typography>
-                    }
-                  />
-                  <Chip
-                    label={student.present ? 'Có mặt' : 'Vắng mặt'}
-                    color={student.present ? 'success' : 'error'}
-                    variant="outlined"
-                  />
-                </ListItem>
-                {index < students.length - 1 && <Divider />}
-              </React.Fragment>
+            {attendanceRecords.map(r=> (
+              <ListItem key={r.student_id} divider secondaryAction={<Checkbox checked={r.present===true} onChange={()=>togglePresent(r.student_id)} /> }>
+                <ListItemAvatar><Avatar>{r.name?.charAt(0)}</Avatar></ListItemAvatar>
+                <ListItemText primary={r.name} secondary={r.present===true ? 'Có mặt' : r.present===false ? 'Vắng' : 'Chưa điểm danh'} />
+              </ListItem>
             ))}
           </List>
         </Paper>
       )}
 
-      {/* Attendance Dialog */}
-      <Dialog
-        open={attendanceDialog}
-        onClose={() => setAttendanceDialog(false)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: '20px',
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(20px)',
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-          borderTopLeftRadius: '20px',
-          borderTopRightRadius: '20px'
-        }}>
-          <Box display="flex" alignItems="center" gap={2}>
-            <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}>
-              <EventNoteIcon />
-            </Avatar>
-            <Box>
-              <Typography variant="h6" fontWeight="bold">
-                Điểm danh lớp {mockClasses.find(c => c.id === parseInt(selectedClass))?.name}
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Ngày: {new Date(selectedDate).toLocaleDateString('vi-VN')}
-              </Typography>
-            </Box>
-          </Box>
-        </DialogTitle>
-
-        <DialogContent sx={{ p: 3 }}>
-          <Alert severity="info" sx={{ mb: 3 }}>
-            Đánh dấu học sinh có mặt hoặc vắng mặt. Dữ liệu sẽ được lưu vào hệ thống.
-          </Alert>
-
+      <Dialog open={attendanceDialog} onClose={()=>setAttendanceDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Điểm danh thủ công</DialogTitle>
+        <DialogContent dividers>
+          <Button size="small" onClick={markAll} sx={{mb:1}}>Đánh dấu tất cả có mặt</Button>
           <List>
-            {students.map((student, index) => (
-              <React.Fragment key={student.id}>
-                <ListItem sx={{ px: 0 }}>
-                  <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: 'primary.light' }}>
-                      {student.name.charAt(0)}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={student.name}
-                    secondary={`Mã: ${student.student_id}`}
-                  />
-                  <Box display="flex" gap={1}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={student.present}
-                          onChange={(e) => handleAttendanceChange(student.id, e.target.checked)}
-                          color="success"
-                        />
-                      }
-                      label="Có mặt"
-                    />
-                  </Box>
-                </ListItem>
-                {index < students.length - 1 && <Divider />}
-              </React.Fragment>
+            {attendanceRecords.map(r=> (
+              <ListItem key={r.student_id} divider>
+                <ListItemAvatar><Avatar>{r.name?.charAt(0)}</Avatar></ListItemAvatar>
+                <ListItemText primary={r.name} secondary={`ID: ${r.student_id}`} />
+                <FormControlLabel control={<Checkbox checked={r.present===true} onChange={()=>togglePresent(r.student_id)} />} label="Có mặt" />
+                <TextField size="small" value={r.notes} onChange={e=>changeNotes(r.student_id,e.target.value)} placeholder="Ghi chú" sx={{ml:1}} />
+              </ListItem>
             ))}
           </List>
-
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            label="Ghi chú (tùy chọn)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            sx={{ mt: 2 }}
-            placeholder="Ghi chú về buổi học, học sinh vắng mặt..."
-          />
         </DialogContent>
-
-        <DialogActions sx={{ p: 3, pt: 0 }}>
-          <Button
-            onClick={() => setAttendanceDialog(false)}
-            variant="outlined"
-            disabled={saving}
-            sx={{ borderRadius: '10px', textTransform: 'none' }}
-          >
-            Hủy
-          </Button>
-          <Button
-            onClick={handleSaveAttendance}
-            variant="contained"
-            disabled={saving}
-            startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
-            sx={{ borderRadius: '10px', textTransform: 'none' }}
-          >
-            {saving ? 'Đang lưu...' : 'Lưu điểm danh'}
-          </Button>
+        <DialogActions>
+          <Button onClick={()=>setAttendanceDialog(false)}>Đóng</Button>
+          <Button onClick={save} disabled={!hasChanges || saving} startIcon={saving && <CircularProgress size={16}/>}>Lưu</Button>
         </DialogActions>
       </Dialog>
 
-      {/* QR Scan Dialog */}
-      <Dialog
-        open={qrScanDialog}
-        onClose={() => setQrScanDialog(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: '20px',
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(20px)',
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-          borderTopLeftRadius: '20px',
-          borderTopRightRadius: '20px'
-        }}>
-          <Box display="flex" alignItems="center" justifyContent="space-between">
-            <Box display="flex" alignItems="center" gap={2}>
-              <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.2)' }}>
-                <QrCodeScannerIcon />
-              </Avatar>
-              <Typography variant="h6" fontWeight="bold">
-                Quét mã QR điểm danh
-              </Typography>
-            </Box>
-            <IconButton 
-              onClick={() => setQrScanDialog(false)}
-              sx={{ color: 'white' }}
-            >
-              <CloseIcon />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-
-        <DialogContent sx={{ p: 3, textAlign: 'center' }}>
-          <Box 
-            sx={{
-              border: '2px dashed #ccc',
-              borderRadius: '10px',
-              p: 4,
-              mb: 3,
-              minHeight: '200px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <QrCodeScannerIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              Sẵn sàng quét mã QR
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Hướng camera vào mã QR của học sinh
-            </Typography>
-          </Box>
-
-          <Alert severity="info">
-            Học sinh cần mở ứng dụng và hiển thị mã QR để điểm danh
-          </Alert>
-
-          {/* Mock QR scan buttons for demo */}
-          <Box mt={2}>
-            <Typography variant="subtitle2" color="text.secondary" mb={1}>
-              Demo - Nhấn để mô phỏng quét QR:
-            </Typography>
-            <Box display="flex" gap={1} flexWrap="wrap" justifyContent="center">
-              {students.filter(s => !s.present).map(student => (
-                <Button
-                  key={student.id}
-                  size="small"
-                  variant="outlined"
-                  onClick={() => {
-                    if (mockQrScanResult(student.student_id)) {
-                      alert(`Đã điểm danh cho ${student.name}`);
-                    }
-                  }}
-                  sx={{ textTransform: 'none' }}
-                >
-                  {student.student_id}
-                </Button>
-              ))}
-            </Box>
-          </Box>
+      <Dialog open={qrDialog} onClose={closeQr} maxWidth="sm" fullWidth>
+        <DialogTitle>Quét QR</DialogTitle>
+        <DialogContent>
+          <Box id="teacher-qr" ref={qrRef} sx={{width:'100%', minHeight:260}} />
+          {scannedStudentId && <Alert severity="success" sx={{mt:2}}>Đã điểm danh {attendanceRecords.find(r=>r.student_id===scannedStudentId)?.name}</Alert>}
         </DialogContent>
+        <DialogActions>
+          <Button onClick={closeQr}>Đóng</Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

@@ -37,8 +37,7 @@ export const getTeacherSubjectGrades = async (teacherUserId) => {
       subject_name: item.subjects_grades?.subject?.name,
       combination_name: item.subjects_grades?.name,
       description: item.subjects_grades?.description,
-      display_name: item.subjects_grades?.name || 
-                   `${item.subjects_grades?.subject?.name || 'Môn học'} - Lớp ${item.subjects_grades?.grade_id || 'N/A'}`
+  // display_name removed (no such column); keep combination_name only
     }));
 
     return { data: transformed, error: null };
@@ -194,8 +193,7 @@ export const getSubjectGradeCombinations = async () => {
       subject_id: item.subject_id,
       grade_id: item.grade_id,
       name: item.name || `Môn ${item.subject_id} - Lớp ${item.grade_id}`,
-      description: item.description || '',
-      display_name: item.name || `Môn ${item.subject_id} - Lớp ${item.grade_id}`,
+      description: item.description || ''
     }));
 
     return { data: transformed, error: null };

@@ -141,15 +141,15 @@ const theme = createTheme({
           },
         },
         containedPrimary: {
-          background: 'linear-gradient(135deg, #5c9bd5 0%, #4a90d9 100%)', // Softer gradient
+          backgroundColor: '#5c9bd5',
           '&:hover': {
-            background: 'linear-gradient(135deg, #4a90d9 0%, #3a7bc8 100%)',
+            backgroundColor: '#4a90d9',
           },
         },
         containedSecondary: {
-          background: 'linear-gradient(135deg, #70a288 0%, #5d8a73 100%)', // Softer gradient
+          backgroundColor: '#70a288',
           '&:hover': {
-            background: 'linear-gradient(135deg, #5d8a73 0%, #4a7c59 100%)',
+            backgroundColor: '#5d8a73',
           },
         },
       },

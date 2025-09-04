@@ -101,7 +101,7 @@ const TeacherManagement = () => {
   };
 
   const getSpecializationOptions = () => {
-    return subjectsGrades.map(sg => ({ id: sg.id, label: sg.name || sg.display_name, value: sg.id }));
+    return subjectsGrades.map(sg => ({ id: sg.id, label: sg.name, value: sg.id }));
   };
 
   const handleOpenForCreate = () => {
@@ -250,7 +250,7 @@ const TeacherManagement = () => {
             <InputLabel>Chuyên môn</InputLabel>
             <Select value={filterSubject} label="Chuyên môn" onChange={e => setFilterSubject(e.target.value)}>
               <MenuItem value="">Tất cả</MenuItem>
-              {Array.from(new Set(subjectsGrades.map(sg => sg.name || sg.display_name).filter(Boolean))).map(name => (
+              {Array.from(new Set(subjectsGrades.map(sg => sg.name).filter(Boolean))).map(name => (
                 <MenuItem key={name} value={name}>{name}</MenuItem>
               ))}
             </Select>

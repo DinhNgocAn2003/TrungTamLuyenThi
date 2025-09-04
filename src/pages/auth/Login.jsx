@@ -1,29 +1,12 @@
 import { useState, useEffect } from 'react';
-import {
-  Box,
-  Container,
-  Typography,
-  TextField,
-  Button,
-  Paper,
-  Grid,
-  Link,
-  InputAdornment,
-  IconButton,
-  Alert,
-  CircularProgress
-} from '@mui/material';
-import {
-  Email as EmailIcon,
-  Lock as LockIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
-  School as SchoolIcon
-} from '@mui/icons-material';
+import { Box, Container, Typography, TextField, Button, Paper, Grid, Link, InputAdornment, IconButton, Alert, CircularProgress, Divider } from '@mui/material';
+import { Email as EmailIcon, Lock as LockIcon, Visibility as VisibilityIcon, VisibilityOff as VisibilityOffIcon } from '@mui/icons-material';
+import logo from '../../assets/logo.png';
 import { useNavigate, Navigate } from 'react-router-dom';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotification } from '../../contexts/NotificationContext';
+import { signInWithEmailOrPhone } from '../../services/supabase/auth';
 
 function Login() {
   const navigate = useNavigate();
@@ -36,73 +19,32 @@ function Login() {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Nếu đã đăng nhập, chuyển hướng dựa vào role
+  // Redirect ngay khi có user: ưu tiên userProfile.role, fallback metadata role
   useEffect(() => {
-    // Chỉ redirect khi có user và userProfile (để lấy role)
-    if (!loading && user && userProfile) {
-      const role = userProfile?.role?.toLowerCase();
-      
-      if (!role) {
-        showNotification('Tài khoản chưa được phân quyền. Vui lòng liên hệ quản trị viên.', 'warning');
-        return;
-      }
-      
-      // Redirect dựa trên role từ user_profiles
-      if (role === 'admin') {
-        console.log('✅ Redirecting to ADMIN dashboard');
-        navigate('/admin/dashboard', { replace: true });
-      } else if (role === 'teacher') {
-        console.log('✅ Redirecting to TEACHER dashboard');
-        navigate('/teacher/dashboard', { replace: true });
-      } else if (role === 'student') {
-        console.log('✅ Redirecting to STUDENT dashboard');
-        navigate('/student/dashboard', { replace: true });
-      } else {
-        console.log('❌ Unknown role:', role);
-        showNotification('Vai trò không hợp lệ. Vui lòng liên hệ quản trị viên.', 'error');
-      }
-    } else if (!loading && user && !userProfile) {
-      console.log('⏳ User logged in but waiting for profile to load from user_profiles...');
-    } else {
-      console.log('⏳ Waiting for auth:', { 
-        loading, 
-        hasUser: !!user,
-        hasProfile: !!userProfile,
-        userEmail: user?.email
-      });
+    if (loading || !user) return;
+    const profileRole = userProfile?.role?.toLowerCase();
+    const metaRole = user?.user_metadata?.role?.toLowerCase();
+    const effectiveRole = profileRole || metaRole;
+    if (!effectiveRole) return; // chưa có role -> chờ thêm
+    let target = '/login';
+    if (effectiveRole === 'admin') target = '/admin/dashboard';
+    else if (effectiveRole === 'teacher') target = '/teacher/dashboard';
+    else if (effectiveRole === 'student') target = '/student/dashboard';
+    else {
+      showNotification('Vai trò không hợp lệ. Liên hệ quản trị.', 'error');
+      return;
+    }
+    // Nếu đã ở đúng path thì thôi
+    if (window.location.pathname !== target) {
+      navigate(target, { replace: true });
     }
   }, [user, userProfile, loading, navigate, showNotification]);
   
-  // Nếu đang loading, hiển thị loading
+  // Loading chỉ khi auth context đang xử lý session ban đầu
   if (loading) {
     return (
-      <Box sx={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #a8b8e6 0%, #c8a2c8 100%)' // Softer gradient
-      }}>
-        <CircularProgress size={60} sx={{ color: 'white' }} />
-      </Box>
-    );
-  }
-
-  // Nếu đang loading hoặc đã có user nhưng chưa có userProfile thì hiển thị loading
-  if (loading || (user && !userProfile)) {
-    return (
-      <Box sx={{ 
-        minHeight: '100vh', 
-        display: 'flex', 
-        flexDirection: 'column',
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #a8b8e6 0%, #c8a2c8 100%)' // Softer gradient
-      }}>
-        <CircularProgress size={60} sx={{ color: 'white', mb: 2 }} />
-        <Typography variant="h6" sx={{ color: 'white', textAlign: 'center' }}>
-          {loading ? 'Đang kiểm tra đăng nhập...' : 'Đang tải thông tin người dùng...'}
-        </Typography>
+      <Box sx={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f5f9ff' }}>
+        <CircularProgress />
       </Box>
     );
   }
@@ -113,11 +55,10 @@ function Login() {
     if (!email.trim()) {
       newErrors.email = 'Email hoặc số điện thoại là bắt buộc';
     } else {
-      // Check if it's phone number
-      const phoneRegex = /^(\+84|84|0)([3|5|7|8|9])+([0-9]{8})$/;
-      const isPhone = phoneRegex.test(email.replace(/\s/g, ''));
-      
-      // If not phone, validate as email
+      // Same rule as services/supabase/auth.js (isPhoneNumber)
+      const phoneRegex = /^(\+84|84|0)[0-9]{9}$/;
+      const isPhone = phoneRegex.test(email.replace(/\s|-/g, ''));
+      // If not phone, must be valid email
       if (!isPhone && !/\S+@\S+\.\S+/.test(email)) {
         newErrors.email = 'Email không hợp lệ hoặc số điện thoại không đúng định dạng';
       }
@@ -144,11 +85,10 @@ function Login() {
     setErrors({});
     
     try {
-      console.log('🔐 Attempting login...');
-      const result = await signIn(email, password);
+      const result = await signInWithEmailOrPhone(email, password);
       
       if (result.error) {
-        console.error('❌ Login failed:', result.error);
+  // Silent fail except user feedback
         
         // Handle specific error types
         let errorMessage = 'Đăng nhập thất bại';
@@ -169,13 +109,11 @@ function Login() {
         setErrors({ 
           general: errorMessage 
         });
-      } else {
-        console.log('✅ Login successful');
+  } else {
         showNotification('Đăng nhập thành công!', 'success');
         // Navigation will be handled by useEffect
       }
     } catch (error) {
-      console.error('❌ Unexpected login error:', error);
       const errorMessage = 'Có lỗi không mong muốn xảy ra. Vui lòng thử lại';
       showNotification(errorMessage, 'error');
       setErrors({ 
@@ -190,239 +128,142 @@ function Login() {
     setShowPassword(!showPassword);
   };
 
-  return (
-    <Box sx={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #a8b8e6 0%, #c8a2c8 100%)', // Softer gradient
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      py: 3
-    }}>
-      <Container maxWidth="sm">
-        <Paper sx={{
-          borderRadius: 4,
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.9) 100%)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255,255,255,0.3)',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
+return (
+  <Box sx={{ 
+    minHeight: '100dvh', 
+    bgcolor: '#dbe7f6', 
+    display: 'flex', 
+    alignItems: 'center',
+    py: { xs: 2, md: 4 }
+  }}>
+      <Container maxWidth="md" sx={{ px: { xs: 1, sm: 2 } }}>
+        <Paper elevation={3} sx={{ 
+            borderRadius: { xs: 3, md: 4 }, 
+            overflow: 'hidden',
+            mx: { xs: 1, sm: 2 },
         }}>
-          {/* Header */}
-          <Box sx={{
-            background: 'linear-gradient(135deg, #81c784 0%, #aed581 100%)', // Softer green gradient
-            p: 4,
-            textAlign: 'center',
-            color: 'white',
-            position: 'relative'
-          }}>
-            <Box sx={{ 
-              position: 'absolute',
-              top: -30,
-              right: -30,
-              width: 80,
-              height: 80,
-              borderRadius: '50%',
-              bgcolor: 'rgba(255,255,255,0.1)',
-            }} />
-            <Box sx={{ 
-              position: 'absolute',
-              bottom: -20,
-              left: -20,
-              width: 60,
-              height: 60,
-              borderRadius: '50%',
-              bgcolor: 'rgba(255,255,255,0.1)',
-            }} />
+          <Grid container sx={{ flexDirection: { xs: 'column', md: 'row' } }}>
+            {/* Branding Panel */}
+            <Grid item md={5} sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              gap: 1,
+              p: { xs: 3, md: 4 },
+              background: 'linear-gradient(145deg,#1976d2 0%,#42a5f5 60%,#90caf9 100%)',
+              color: 'white',
+              minHeight: 'auto'
+            }}>
+              <Box textAlign="center" sx={{ 
+                  mb: { xs: 0, md: 4 },
+                  gap: 0.5, 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  minHeight: { xs: 'auto', md: '15vh' }
+                }}>
+                <Box component="img" src={logo} alt="Logo" sx={{ 
+                    width: { xs: 40, md: 50 }, 
+                    height: { xs: 40, md: 50 } 
+                }} />
+                <Typography variant="h6" fontWeight={700} sx={{ fontSize: { xs: '1rem', md: '1.25rem' } }}>
+                  Trung Tâm Luyện Thi DNA
+                </Typography>
+              </Box>
+            </Grid>
             
-            <SchoolIcon sx={{ fontSize: 64, mb: 2, opacity: 0.9 }} />
-            <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-              🎓 Trung Tâm Luyện Thi
-            </Typography>
-            <Typography variant="h6" sx={{ opacity: 0.9 }}>
-              📚 Chào mừng bạn quay trở lại!
-            </Typography>
-          </Box>
-
-          {/* Form */}
-          <Box sx={{ p: 4 }}>
-            <Typography variant="h5" fontWeight="bold" textAlign="center" mb={3} color="primary.main">
-              🔐 Đăng nhập vào hệ thống
-            </Typography>
-            
-            {errors.general && (
-              <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-                {errors.general}
-              </Alert>
-            )}
-            
-            <form onSubmit={handleSubmit}>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
+            {/* Form Panel */}
+            <Grid item xs={12} md={7} sx={{ 
+                p: { xs: 3, sm: 4, md: 6 }, 
+                display: 'flex', 
+                flexDirection: 'column', 
+                justifyContent: 'center' 
+            }}>
+              <Box maxWidth={380} mx="auto" width="100%">
+                <Typography variant="h5" fontWeight={600} mb={1} sx={{ fontSize: { xs: '1.5rem', md: '1.75rem' } }}>
+                  Đăng nhập
+                </Typography>
+                <Typography variant="body2" color="text.secondary" mb={3} sx={{ fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
+                  Nhập thông tin để tiếp tục
+                </Typography>
+                {errors.general && <Alert severity="error" sx={{ mb: 2, fontSize: { xs: '0.8rem', md: '0.875rem' } }}>{errors.general}</Alert>}
+                <form onSubmit={handleSubmit} noValidate>
                   <TextField
                     fullWidth
-                    label="📧 Email hoặc 📱 Số điện thoại"
+                    label="Email hoặc Số điện thoại"
                     type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     error={!!errors.email}
-                    helperText={errors.email || "Nhập email hoặc số điện thoại của bạn"}
                     disabled={isSubmitting}
-                    placeholder="example@email.com hoặc 0xxxxxxxxx"
+                    margin="normal"
                     InputProps={{
                       startAdornment: (
-                        <InputAdornment position="start">
-                          <EmailIcon color="primary" />
-                        </InputAdornment>
-                      ),
+                        <InputAdornment position="start"><EmailIcon fontSize="small" /></InputAdornment>
+                      )
                     }}
                     sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 2,
-                        bgcolor: 'rgba(255,255,255,0.8)',
-                        '&:hover': {
-                          bgcolor: 'rgba(255,255,255,0.9)'
-                        },
-                        '&.Mui-focused': {
-                          bgcolor: 'white'
-                        }
+                      '& .MuiInputBase-root': {
+                        height: { xs: 48, md: 56 }
                       }
                     }}
                   />
-                </Grid>
-                
-                <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label="🔒 Mật khẩu"
+                    label="Mật khẩu"
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     error={!!errors.password}
                     helperText={errors.password}
                     disabled={isSubmitting}
+                    margin="normal"
                     InputProps={{
                       startAdornment: (
-                        <InputAdornment position="start">
-                          <LockIcon color="primary" />
-                        </InputAdornment>
+                        <InputAdornment position="start"><LockIcon fontSize="small" /></InputAdornment>
                       ),
                       endAdornment: (
                         <InputAdornment position="end">
-                          <IconButton
-                            onClick={handleTogglePasswordVisibility}
-                            edge="end"
-                            disabled={isSubmitting}
-                          >
+                          <IconButton onClick={handleTogglePasswordVisibility} edge="end" size="small" disabled={isSubmitting}>
                             {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
                           </IconButton>
                         </InputAdornment>
-                      ),
+                      )
                     }}
                     sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 2,
-                        bgcolor: 'rgba(255,255,255,0.8)',
-                        '&:hover': {
-                          bgcolor: 'rgba(255,255,255,0.9)'
-                        },
-                        '&.Mui-focused': {
-                          bgcolor: 'white'
-                        }
+                      '& .MuiInputBase-root': {
+                        height: { xs: 48, md: 56 }
                       }
                     }}
                   />
-                </Grid>
-                
-                <Grid item xs={12}>
-                  <Button
-                    type="submit"
-                    fullWidth
-                    variant="contained"
-                    size="large"
-                    disabled={isSubmitting}
-                    sx={{
-                      mt: 2,
-                      py: 1.5,
-                      borderRadius: 3,
-                      background: 'linear-gradient(135deg, #5c9bd5 0%, #70a288 100%)', // Softer button gradient
-                      fontSize: '1.1rem',
-                      fontWeight: 'bold',
-                      textTransform: 'none',
-                      boxShadow: '0 6px 12px rgba(92,155,213,0.2)', // Softer shadow
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #4a90d9 0%, #5d8a73 100%)',
-                        transform: 'translateY(-1px)', // Less movement
-                        boxShadow: '0 8px 16px rgba(92,155,213,0.3)' // Softer shadow
-                      },
-                      '&.Mui-disabled': {
-                        background: 'linear-gradient(135deg, #ccc 0%, #999 100%)'
-                      }
-                    }}
-                  >
-                    {isSubmitting ? (
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <CircularProgress size={20} color="inherit" />
-                        <span>🔄 Đang đăng nhập...</span>
-                      </Box>
-                    ) : (
-                      '🚀 Đăng nhập'
-                    )}
+                  <Button type="submit" fullWidth variant="contained" disabled={isSubmitting} sx={{ 
+                      mt: 2, 
+                      mb: 1, 
+                      py: { xs: 1, md: 1.2 },
+                      fontSize: { xs: '0.9rem', md: '1rem' }
+                    }}>
+                    {isSubmitting ? <CircularProgress size={20} color="inherit" /> : 'Đăng nhập'}
                   </Button>
-                </Grid>
-              </Grid>
-              
-              <Box sx={{ mt: 3, textAlign: 'center' }}>
-                <Typography variant="body2" color="text.secondary" mb={2}>
-                  Quên mật khẩu?
-                </Typography>
-                <Link
-                  component="button"
-                  type="button"
-                  variant="body2"
-                  onClick={() => navigate('/auth/forgot-password')}
-                  sx={{
-                    color: 'primary.main',
-                    fontWeight: 'medium',
-                    textDecoration: 'none',
-                    '&:hover': {
-                      textDecoration: 'underline'
-                    }
-                  }}
-                >
-                  🔑 Khôi phục mật khẩu
-                </Link>
+                  <Box textAlign="right" mb={2}>
+                    <Link component="button" variant="body2" onClick={() => navigate('/auth/forgot-password')} sx={{ fontSize: { xs: '0.8rem', md: '0.875rem' } }}>
+                      Quên mật khẩu?
+                    </Link>
+                  </Box>
+                  <Alert severity="info" sx={{ 
+                      fontSize: { xs: 11, md: 12 }, 
+                      py: { xs: 0.5, md: 0.5 }, 
+                      mb: 0,
+                      '& .MuiAlert-message': {
+                        padding: { xs: '4px 0', md: '6px 0' }
+                      }
+                    }}>
+                    Tài khoản do quản trị viên cấp. Nếu chưa có tài khoản hãy liên hệ quản trị.
+                  </Alert>
+                </form>
               </Box>
-              
-              <Box mt={3}>
-                <Alert 
-                  severity="info" 
-                  sx={{ 
-                    borderRadius: 2,
-                    bgcolor: 'rgba(33,150,243,0.1)',
-                    border: '1px solid rgba(33,150,243,0.2)'
-                  }}
-                >
-                  <Typography variant="body2" fontWeight="medium">
-                    💡 <strong>Lưu ý:</strong> Tài khoản được cấp bởi quản trị viên. 
-                    Nếu bạn chưa có tài khoản hoặc gặp vấn đề khi đăng nhập, 
-                    vui lòng liên hệ với quản trị viên.
-                  </Typography>
-                </Alert>
-              </Box>
-            </form>
-          </Box>
+            </Grid>
+          </Grid>
         </Paper>
-        
-        {/* Footer */}
-        <Box sx={{ mt: 3, textAlign: 'center' }}>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-            © 2024 Trung Tâm Luyện Thi. All rights reserved.
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', mt: 1, display: 'block' }}>
-            🌟 Nơi ươm mầm tương lai 🌟
-          </Typography>
-        </Box>
       </Container>
     </Box>
   );

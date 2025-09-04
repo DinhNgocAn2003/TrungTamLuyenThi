@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Suspense, lazy, useEffect } from 'react';
 import { CircularProgress, Box } from '@mui/material';
 
@@ -58,98 +58,61 @@ const LoadingFallback = () => (
 
 // Protected route components
 const AdminRoute = ({ children }) => {
-  const { user, userProfile, isLoading, isFirstLogin } = useAuth();
-  
-  if (isLoading) {
-    return <LoadingFallback />;
-  }
-  
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
-  
-  if (isFirstLogin) {
-    return <Navigate to="/change-password" />;
-  }
-  
-  const roleFromMetadata = user.user_metadata?.role;
-  const roleFromProfile = userProfile?.role;
-  const userRole = roleFromMetadata || roleFromProfile;
-  
-  console.log('AdminRoute - checking role:', { roleFromMetadata, roleFromProfile, userRole });
-  
-  if (userRole !== 'admin') {
-    return <Navigate to="/unauthorized" />;
-  }
-  
+  const { user, userProfile, loading } = useAuth();
+  if (loading) return <LoadingFallback />;
+  if (!user) return <Navigate to="/login" replace />;
+  const userRole = userProfile?.role || user?.user_metadata?.role || user?.role;
+  if (userRole !== 'admin') return <Navigate to="/unauthorized" replace />;
   return children;
 };
 
 const TeacherRoute = ({ children }) => {
-  const { user, userProfile, isLoading, isFirstLogin } = useAuth();
-  
-  if (isLoading) {
-    return <LoadingFallback />;
-  }
-  
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
-  
-  if (isFirstLogin) {
-    return <Navigate to="/change-password" />;
-  }
-  
-  const roleFromMetadata = user.user_metadata?.role;
-  const roleFromProfile = userProfile?.role;
-  const userRole = roleFromMetadata || roleFromProfile;
-  
-  console.log('TeacherRoute - checking role:', { roleFromMetadata, roleFromProfile, userRole });
-  
-  if (userRole !== 'teacher') {
-    return <Navigate to="/unauthorized" />;
-  }
-  
+  const { user, userProfile, loading } = useAuth();
+  if (loading) return <LoadingFallback />;
+  if (!user) return <Navigate to="/login" replace />;
+  const metaRole = user?.user_metadata?.role || user?.role;
+  const profileRole = userProfile?.role;
+  const effectiveRole = profileRole || metaRole;
+  // If metadata says NOT teacher but we haven't loaded profile yet, wait (avoid mis-routing to student)
+  if (!profileRole && metaRole !== 'teacher') return <LoadingFallback />;
+  if (effectiveRole !== 'teacher') return <Navigate to="/unauthorized" replace />;
   return children;
 };
 
 const StudentRoute = ({ children }) => {
-  const { user, userProfile, isLoading, isFirstLogin } = useAuth();
-  
-  if (isLoading) {
-    return <LoadingFallback />;
-  }
-  
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
-  
-  if (isFirstLogin) {
-    return <Navigate to="/change-password" />;
-  }
-  
-  const roleFromMetadata = user.user_metadata?.role;
-  const roleFromProfile = userProfile?.role;
-  const userRole = roleFromMetadata || roleFromProfile;
-  
-  console.log('StudentRoute - checking role:', { roleFromMetadata, roleFromProfile, userRole });
-  
-  if (userRole !== 'student') {
-    return <Navigate to="/unauthorized" />;
-  }
-  
+  const { user, userProfile, loading } = useAuth();
+  if (loading) return <LoadingFallback />;
+  if (!user) return <Navigate to="/login" replace />;
+  const metaRole = user?.user_metadata?.role || user?.role;
+  const profileRole = userProfile?.role;
+  const effectiveRole = profileRole || metaRole;
+  // If metadata says NOT student but profile also not loaded yet, wait to avoid flicker
+  if (!profileRole && metaRole !== 'student') return <LoadingFallback />;
+  if (effectiveRole !== 'student') return <Navigate to="/unauthorized" replace />;
   return children;
 };
 
 const AppRoutes = () => {
-  const { user, isFirstLogin, isLoading } = useAuth();
-  
-  // Redirect to change password if it's the first login
+  const { user, userProfile, loading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Ensure correct section when role resolves (fix case where metadata role was different -> wrong layout)
   useEffect(() => {
-    if (user && isFirstLogin && window.location.pathname !== '/change-password') {
-      window.location.href = '/change-password';
+    if (loading) return;
+    const profileRole = userProfile?.role;
+    if (!profileRole) return; // wait until we know
+    // If teacher currently under /student path -> redirect
+    if (profileRole === 'teacher' && location.pathname.startsWith('/student')) {
+      navigate('/teacher/dashboard', { replace: true });
+      return;
     }
-  }, [user, isFirstLogin]);
+    // If student under /teacher path -> redirect
+    if (profileRole === 'student' && location.pathname.startsWith('/teacher')) {
+      navigate('/student/dashboard', { replace: true });
+      return;
+    }
+  }, [userProfile, location.pathname, navigate, loading]);
   
   return (
     <Suspense fallback={<LoadingFallback />}>
@@ -190,8 +153,8 @@ const AppRoutes = () => {
           <Route path="dashboard" element={<TeacherDashboard />} />
           <Route path="classes" element={<TeacherClasses />} />
           <Route path="attendance" element={<TeacherAttendance />} />
-          <Route path="tests" element={<TeacherTests />} />
-          <Route path="grades" element={<TeacherGrades />} />
+          {/* <Route path="tests" element={<TeacherTests />} />
+          <Route path="grades" element={<TeacherGrades />} /> */}
         </Route>
         
         {/* Student routes - /student/* */}

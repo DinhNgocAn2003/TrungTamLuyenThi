@@ -63,7 +63,11 @@ export const AuthProvider = ({ children }) => {
         userProfile: null,
         loading: false
       });
-      
+      // Invalidate any cached protected content and force redirect
+      try {
+        // Replace current history entry with login so back will not reopen protected route
+        window.history.replaceState({}, '', '/login');
+      } catch(_) {}
       return { error: null };
     } catch (error) {
       console.error('Sign out error:', error);
@@ -103,9 +107,17 @@ export const AuthProvider = ({ children }) => {
         if (error) throw error;
         
         if (session?.user) {
-          
+          // Minimal user exposure: only id + email + metadata role + full_name
+          const minimalUser = {
+            id: session.user.id,
+            email: session.user.email,
+            user_metadata: {
+              role: session.user.user_metadata?.role,
+              full_name: session.user.user_metadata?.full_name
+            }
+          };
           setAuthState({
-            user: session.user,
+            user: minimalUser,
             userProfile: null,
             loading: false
           });
@@ -162,8 +174,16 @@ export const AuthProvider = ({ children }) => {
       }
       
       if (session?.user) {
+        const minimalUser = {
+          id: session.user.id,
+          email: session.user.email,
+          user_metadata: {
+            role: session.user.user_metadata?.role,
+            full_name: session.user.user_metadata?.full_name
+          }
+        };
         setAuthState({
-          user: session.user,
+          user: minimalUser,
           userProfile: null,
           loading: false
         });
@@ -190,6 +210,16 @@ export const AuthProvider = ({ children }) => {
       subscription.unsubscribe();
     };
   }, [refreshUserProfile, setupAutoLogout, autoLogout]);
+
+  // Global redirect: if finished loading and no user, force to /login (except auth pages)
+  useEffect(() => {
+    if (!authState.loading && !authState.user) {
+      const publicPaths = ['/login','/forgot-password','/change-password'];
+      if (!publicPaths.includes(window.location.pathname)) {
+        window.location.replace('/login');
+      }
+    }
+  }, [authState.loading, authState.user]);
 
   const signIn = async (emailOrPhone, password) => {
     try {

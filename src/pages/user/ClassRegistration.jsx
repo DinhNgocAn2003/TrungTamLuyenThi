@@ -39,6 +39,7 @@ import {
   School as SchoolIcon,
   CalendarMonth as CalendarMonthIcon
 } from '@mui/icons-material';
+import { Person as PersonIcon } from '@mui/icons-material';
 import { Tabs, Tab } from '@mui/material';
 import { ToggleButton, ToggleButtonGroup } from '@mui/material';
 import dayjs from 'dayjs';
@@ -51,10 +52,12 @@ import {
   enrollClass,
   getStudentByUserId,
   getEnrollments,
-  getClassTeachers
+  getClassTeachers,
+  getClassById
 } from '../../services/supabase/database';
+// (Removed subjects_grades filter; we'll filter by subject only)
 // Lấy lịch học nhiều lớp
-import { getSchedulesForClasses } from '../../services/supabase/classes';
+import { getSchedulesForClasses, getSubjectsGradesByIds } from '../../services/supabase/classes';
 
 function ClassRegistration() {
   const { user } = useAuth();
@@ -70,10 +73,31 @@ function ClassRegistration() {
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [successDialog, setSuccessDialog] = useState(false);
   const [schedulesMap, setSchedulesMap] = useState({}); // { classId: [schedules] }
-  const [tabValue, setTabValue] = useState(0); // 0=Đăng ký, 1=Môn của tôi
+  const [tabValue, setTabValue] = useState(0); // 0=Môn của tôi, 1=Đăng ký
   const [conflicts, setConflicts] = useState([]); // lưu danh sách trùng lịch khi chọn đăng ký
   const [selectedClassTeachers, setSelectedClassTeachers] = useState([]);
   const [myStatusFilter, setMyStatusFilter] = useState('active'); // active | ended | all
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [detailClass, setDetailClass] = useState(null);
+  const [detailTeachers, setDetailTeachers] = useState([]);
+  const [subjectFilter, setSubjectFilter] = useState('all');
+  const [subjectOptions, setSubjectOptions] = useState([]); // unique subject names
+  const [teachersMap, setTeachersMap] = useState({});
+
+  // Deduplicate classes by id
+  const dedupeClasses = (list) => {
+    const map = new Map();
+    list.forEach(c => { if (c && c.id != null && !map.has(c.id)) map.set(c.id, c); });
+    return Array.from(map.values());
+  };
+
+  const extractSubjectName = (cls) => cls?.subjects_grades?.subject?.name || cls?.subject?.name || '';
+  const extractGrade = (cls) => cls?.subjects_grades?.grade_id || cls?.grade || null;
+  const extractCombination = (cls) => cls?.subjects_grades?.name || (
+    extractSubjectName(cls) && extractGrade(cls)
+      ? `${extractSubjectName(cls)} - Lớp ${extractGrade(cls)}`
+      : extractSubjectName(cls) || 'Không xác định'
+  );
   
   useEffect(() => {
     if (user) {
@@ -81,21 +105,103 @@ function ClassRegistration() {
       fetchClasses();
     }
   }, [user]);
+
+  // Prefetch teachers for visible classes (lazy, avoid duplicates)
+  useEffect(() => {
+    const ids = classes.map(c=>c.id).filter(Boolean);
+    const toFetch = ids.filter(id => !teachersMap[id]);
+    if (!toFetch.length) return;
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.allSettled(toFetch.map(async id => {
+        try { const { data } = await getClassTeachers(id); return { id, data: data||[] }; } catch { return { id, data: [] }; }
+      }));
+      if (cancelled) return;
+      setTeachersMap(prev => {
+        const next = { ...prev };
+        results.forEach(r => { if (r.status==='fulfilled') next[r.value.id] = r.value.data; });
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [classes, teachersMap]);
+
+  // Merge classes from enrollments (may include inactive or non-public) into classes list
+  useEffect(() => {
+    const mergeEnrollmentClasses = async () => {
+      if (!enrollments.length) return;
+      const enrollmentClassesRaw = enrollments.map(e => e.classes).filter(Boolean);
+      if (!enrollmentClassesRaw.length) return;
+      const existingIds = new Set(classes.map(c => c.id));
+      // Filter out already existing ids and then dedupe among themselves
+      const seen = new Set();
+      const toAdd = enrollmentClassesRaw.filter(c => {
+        if (!c || existingIds.has(c.id) || seen.has(c.id)) return false;
+        seen.add(c.id);
+        return true;
+      });
+      if (!toAdd.length) return;
+      // Enrich new classes with subjects_grades + subject if missing
+      const enriched = await Promise.all(toAdd.map(async c => {
+        if (!c.subjects_grades && (c.subjects_grades_id || c.subject_id)) {
+          try {
+            const { data } = await getClassById(c.id);
+            if (data) return data;
+          } catch (_) { /* ignore */ }
+        }
+        return c;
+      }));
+  setClasses(prev => dedupeClasses([...prev, ...enriched]));
+    };
+    mergeEnrollmentClasses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enrollments]);
+
+  // Rebuild subject options whenever classes change, with fallback enrichment if subject missing
+  useEffect(() => {
+    const buildOptions = async () => {
+      if (!classes.length) { setSubjectOptions([]); return; }
+      // Identify classes missing subject name but having subjects_grades_id
+      const missing = classes.filter(c => !extractSubjectName(c) && c.subjects_grades_id);
+      let enrichedMap = {};
+      if (missing.length) {
+        const uniqueIds = Array.from(new Set(missing.map(m => m.subjects_grades_id))); 
+        try {
+          const { data } = await getSubjectsGradesByIds(uniqueIds);
+          data.forEach(row => { enrichedMap[row.id] = row; });
+        } catch (_) {}
+      }
+      const subjectNames = classes.map(c => {
+        let name = extractSubjectName(c);
+        if (!name && c.subjects_grades_id && enrichedMap[c.subjects_grades_id]) {
+          name = enrichedMap[c.subjects_grades_id].subject?.name || '';
+        }
+        return name;
+      }).filter(Boolean);
+      const uniqueSubjects = Array.from(new Set(subjectNames));
+      setSubjectOptions(uniqueSubjects.map(s => ({ value: s, label: s })).sort((a,b)=>a.label.localeCompare(b.label,'vi')));
+    };
+    buildOptions();
+  }, [classes]);
   
     useEffect(() => {
       const activeEnrollmentClassIds = enrollments.filter(e => e.status === 'active').map(e => e.class_id);
       let base = [];
-      if (tabValue === 0) {
-        // Tab Đăng ký: chỉ lớp chưa đăng ký và công khai
+      if (tabValue === 1) {
+        // Tab Đăng ký (index 1): chỉ lớp chưa đăng ký và công khai
         base = classes.filter(c => !activeEnrollmentClassIds.includes(c.id) && ((c.isPublic ?? c.is_public) === true));
       } else {
-        // Tab Môn của tôi: tất cả lớp đã đăng ký (kể cả đã kết thúc) rồi áp dụng bộ lọc trạng thái
+        // Tab Môn của tôi (index 0): tất cả lớp đã đăng ký (kể cả đã kết thúc) rồi áp dụng bộ lọc trạng thái
         base = classes.filter(c => activeEnrollmentClassIds.includes(c.id));
         if (myStatusFilter === 'active') {
           base = base.filter(c => c.is_active === true);
         } else if (myStatusFilter === 'ended') {
           base = base.filter(c => c.is_active === false);
         } // 'all' giữ nguyên
+      }
+      // Apply subject filter if chosen
+      if (subjectFilter !== 'all') {
+        base = base.filter(c => extractSubjectName(c).toLowerCase() === subjectFilter.toLowerCase());
       }
       const lower = searchTerm.trim().toLowerCase();
       if (lower === '') {
@@ -107,7 +213,7 @@ function ClassRegistration() {
           (c.level || '').toLowerCase().includes(lower)
         ));
       }
-    }, [searchTerm, classes, enrollments, tabValue, myStatusFilter]);
+    }, [searchTerm, classes, enrollments, tabValue, myStatusFilter, subjectFilter]);
 
 const fetchStudentData = async () => {
     setLoading(true);
@@ -145,8 +251,10 @@ const fetchStudentData = async () => {
       
       // Nếu không có lớp nào, set thành mảng rỗng
       const classesData = data || [];
-      setClasses(classesData);
-      setFilteredClasses(classesData);
+  const unique = dedupeClasses(classesData);
+  setClasses(unique);
+  setFilteredClasses(unique);
+  // subject options will be built by classes effect
       // Sau khi có danh sách lớp, tải lịch học
       const ids = classesData.map(c => c.id).filter(Boolean);
       if (ids.length) {
@@ -198,6 +306,19 @@ const fetchStudentData = async () => {
     setConfirmDialog(true);
   };
 
+  const openDetail = async (cls) => {
+    setDetailClass(cls);
+    // fetch teachers for detail dialog
+    try {
+      const { data: teachersData } = await getClassTeachers(cls.id);
+      setDetailTeachers(teachersData || []);
+    } catch (_) {
+      setDetailTeachers([]);
+    }
+    setDetailDialogOpen(true);
+  };
+  const closeDetail = () => { setDetailDialogOpen(false); setDetailClass(null); };
+
   const handleCloseConfirmDialog = () => {
     setConfirmDialog(false);
   };
@@ -226,7 +347,7 @@ const fetchStudentData = async () => {
       fetchStudentData();
       handleCloseConfirmDialog();
       setSuccessDialog(true);
-      setTabValue(1);
+  setTabValue(0); // chuyển về tab "Môn của tôi" sau khi đăng ký
     } catch (error) {
       console.error('Error enrolling class:', error);
       showNotification('Lỗi khi đăng ký lớp học: ' + error.message, 'error');
@@ -240,24 +361,32 @@ const fetchStudentData = async () => {
   const dayNames = {
     '1': 'Thứ 2','2': 'Thứ 3','3': 'Thứ 4','4': 'Thứ 5','5': 'Thứ 6','6': 'Thứ 7','0': 'CN'
   };
-  const buildScheduleSummary = (classId) => {
+  // Trả về mảng từng dòng lịch học: "Thứ X HH:MM-HH:MM (Phòng ...)"
+  const getScheduleLines = (classId) => {
     const list = schedulesMap[classId] || [];
-    if (!list.length) return 'Chưa cập nhật';
-    // Gộp theo ngày: mỗi ngày có thể nhiều khoảng -> nối bằng ","
-    const grouped = {};
-    list.forEach(s => {
-      const d = String(s.day_of_week);
-      if (!grouped[d]) grouped[d] = [];
-      grouped[d].push(`${(s.start_time||'').slice(0,5)}-${(s.end_time||'').slice(0,5)}`);
+    if (!list.length) return [];
+    // Sắp xếp trước
+    const sorted = [...list].sort((a,b)=>{
+      const da = parseInt(a.day_of_week,10); const db = parseInt(b.day_of_week,10);
+      if (da !== db) {
+        if (da===0) return 1; // CN cuối
+        if (db===0) return -1;
+        return da - db;
+      }
+      return (a.start_time||'').localeCompare(b.start_time||'');
     });
-    return Object.keys(grouped)
-      .sort((a,b)=>{
-        const da=parseInt(a,10), db=parseInt(b,10);
-        // Đưa CN (0) xuống cuối
-        if (da===0 && db!==0) return 1; if (db===0 && da!==0) return -1; return da-db;
-      })
-      .map(d => `${dayNames[d]||d}: ${grouped[d].join(', ')}`)
-      .join(' | ');
+    return sorted.map(s => {
+      const dn = dayNames[String(s.day_of_week)] || s.day_of_week;
+      const time = `${(s.start_time||'').slice(0,5)}-${(s.end_time||'').slice(0,5)}`;
+      const room = s.location ? ` (${s.location})` : '';
+      return `${dn} ${time}${room}`;
+    });
+  };
+
+  // Giữ hàm cũ để tương thích nơi khác nếu cần (đã chuyển confirm dialog sang dùng getScheduleLines)
+  const buildScheduleSummary = (classId) => {
+    const lines = getScheduleLines(classId);
+    return lines.length ? lines.join('|') : 'Chưa cập nhật';
   };
   
   // Tạo key cho so sánh khoảng thời gian: chuyển về phút
@@ -309,11 +438,11 @@ const fetchStudentData = async () => {
       </Typography>
       <Box sx={{ borderBottom:1, borderColor:'divider', mb:2 }}>
         <Tabs value={tabValue} onChange={(e,v)=>setTabValue(v)}>
-          <Tab label="Đăng ký" />
           <Tab label="Môn của tôi" />
+          <Tab label="Đăng ký" />
         </Tabs>
       </Box>
-      {tabValue === 1 && (
+  {tabValue === 0 && (
         <Box sx={{ mb:2, display:'flex', justifyContent:'flex-end' }}>
           <ToggleButtonGroup
             size="small"
@@ -327,12 +456,26 @@ const fetchStudentData = async () => {
             <ToggleButton value="all" aria-label="Tất cả">Tất cả</ToggleButton>
           </ToggleButtonGroup>
         </Box>
-      )}
+  )}
+      <Box sx={{ mb:2, display:'flex', gap:2, flexWrap:'wrap' }}>
+        <Box sx={{ minWidth:200 }}>
+          <Typography variant="caption" sx={{ display:'block', mb:0.5 }}>Lọc theo môn</Typography>
+          <select
+            value={subjectFilter}
+            onChange={e=>setSubjectFilter(e.target.value)}
+            style={{ width:'100%', padding:'6px 8px', borderRadius:6, border:'1px solid #ccc', background:'#fff' }}
+          >
+            <option value="all">Tất cả môn</option>
+            {subjectOptions.length===0 && <option disabled>(Không có môn)</option>}
+            {subjectOptions.map(opt => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+          </select>
+        </Box>
+      </Box>
       
   <Paper sx={{ p: 2, mb: 3 }}>
         <TextField
           fullWidth
-          placeholder="Tìm kiếm lớp học theo tên, môn học hoặc trình độ..."
+          placeholder="Tìm kiếm lớp học theo tên"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           InputProps={{
@@ -354,7 +497,7 @@ const fetchStudentData = async () => {
       ) : filteredClasses.length === 0 ? (
         <Alert severity="info">
           <AlertTitle>Thông báo</AlertTitle>
-      {tabValue === 0 ? 'Không có môn công khai nào để đăng ký.' : 'Bạn chưa có môn học nào.'}
+  {tabValue === 1 ? 'Không có môn công khai nào để đăng ký.' : 'Bạn chưa có môn học nào.'}
         </Alert>
       ) : (
         <Grid container spacing={3}>
@@ -363,8 +506,8 @@ const fetchStudentData = async () => {
             const isFull = (classItem.max_students && classItem.current_students >= classItem.max_students);
             return (
               <Grid item xs={12} sm={6} md={4} key={classItem.id}>
-                <Card sx={{ height:'100%', display:'flex', flexDirection:'column', position:'relative' }}>
-                  {tabValue === 0 && isEnrolled && (
+                <Card sx={{ height:'100%', display:'flex', flexDirection:'column', position:'relative', backgroundColor:'#fff' }}>
+                  {tabValue === 1 && isEnrolled && (
                     <Chip
                       label="Đã đăng ký"
                       variant="outlined"
@@ -374,11 +517,13 @@ const fetchStudentData = async () => {
                     />
                   )}
                   <CardHeader
+                    titleTypographyProps={{ variant:'h6', fontWeight:600 }}
                     title={classItem.name}
-                    subheader={classItem.subject?.name || 'Không xác định'}
+                    subheaderTypographyProps={{ variant:'body2' }}
+                    subheader={extractCombination(classItem)}
                     action={
                       <Box display='flex' gap={1}>
-                        {tabValue === 0 ? (
+                        {tabValue === 1 ? (
                           <>
                             {(classItem.isPublic ?? classItem.is_public) && <Chip size='small' label='Công khai' color='success' variant='outlined' />}
                             {classItem.is_active===false && <Chip size='small' label='Tạm dừng' color='warning' variant='outlined' />}
@@ -395,18 +540,14 @@ const fetchStudentData = async () => {
                     }
                   />
                   <Divider />
-                  <CardContent sx={{ flexGrow:1 }}>
-                    <Box display='flex' alignItems='center' mb={1}>
-                      <SchoolIcon color='primary' sx={{ mr:1 }} />
-                      <Typography variant='body2'>Trình độ: {classItem.level || 'Không xác định'}</Typography>
-                    </Box>
+                  <CardContent sx={{ flexGrow:1, px:2, py:1 }}>
                     <Box display='flex' alignItems='center' mb={1}>
                       <CalendarMonthIcon color='primary' sx={{ mr:1 }} />
                       <Typography variant='body2'>Lịch học: {buildScheduleSummary(classItem.id)}</Typography>
                     </Box>
-                    <Box display='flex' alignItems='center' mb={2}>
-                      <MonetizationOnIcon color='primary' sx={{ mr:1 }} />
-                      <Typography variant='body2'>Học phí: {classItem.fee.toLocaleString('vi-VN')} VNĐ</Typography>
+                    <Box display='flex' alignItems='center' mb={1}>
+                      <PersonIcon color='primary' sx={{ mr:1 }} />
+                      <Typography variant='body2'>Giáo viên: {teachersMap?.[classItem.id]?.length ? teachersMap[classItem.id].map(t=>t.full_name).filter(Boolean).join(', ') : 'Chưa cập nhật'}</Typography>
                     </Box>
                     {classItem.description && (
                       <Typography variant='body2' color='text.secondary'>
@@ -414,16 +555,12 @@ const fetchStudentData = async () => {
                       </Typography>
                     )}
                     <Box mt={2} display='flex' justifyContent='space-between' alignItems='center'>
-                      <Typography variant='caption' color='text.secondary'>
-                        Sĩ số: {classItem.current_students || 0}/{classItem.max_students || 'Không giới hạn'}
-                      </Typography>
-                      {isFull && <Chip label='Đã đầy' color='error' size='small' variant='outlined' />}
                     </Box>
                   </CardContent>
                   <Divider />
                   <CardActions>
-                    <Button size='small' href={`/user/classes/${classItem.id}`} startIcon={<InfoIcon />}>Chi tiết</Button>
-                    {tabValue === 0 && (
+                    <Button size='small' onClick={()=>openDetail(classItem)} startIcon={<InfoIcon />}>Chi tiết</Button>
+                    {tabValue === 1 && (
                       <Button size='small' color='primary' variant='contained' disabled={isEnrolled || isFull} onClick={() => handleOpenConfirmDialog(classItem)} sx={{ ml:'auto' }}>
                         {isEnrolled ? 'Đã đăng ký' : isFull ? 'Lớp đã đầy' : 'Đăng ký'}
                       </Button>
@@ -455,12 +592,13 @@ const fetchStudentData = async () => {
                     </TableRow>
                     <TableRow>
                       <TableCell component="th" scope="row">Môn học</TableCell>
-                      <TableCell>{selectedClass.subject?.name || 'Không xác định'}</TableCell>
+                      <TableCell>{extractSubjectName(selectedClass) || 'Không xác định'}</TableCell>
                     </TableRow>
                       {selectedClass.description && (
                         <TableRow>
                           <TableCell component="th" scope="row">Mô tả</TableCell>
                           <TableCell>{selectedClass.description}</TableCell>
+                          {console.log(selectedClass)}
                         </TableRow>
                       )}
                     <TableRow>
@@ -469,7 +607,12 @@ const fetchStudentData = async () => {
                     </TableRow>
                     <TableRow>
                       <TableCell component="th" scope="row">Lịch học</TableCell>
-                      <TableCell>{buildScheduleSummary(selectedClass.id)}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const lines = getScheduleLines(selectedClass.id);
+                          return lines.length ? lines.map((l,i)=>(<div key={i}>{l}</div>)) : 'Chưa cập nhật';
+                        })()}
+                      </TableCell>
                     </TableRow>
                       {selectedClassTeachers.length > 0 && (
                         <TableRow>
@@ -518,7 +661,7 @@ const fetchStudentData = async () => {
         </DialogActions>
       </Dialog>
       
-      {/* Dialog đăng ký thành công */}
+  {/* Dialog đăng ký thành công */}
       <Dialog open={successDialog} onClose={handleCloseSuccessDialog}>
         <DialogTitle>Đăng ký thành công</DialogTitle>
         <DialogContent>
@@ -537,6 +680,35 @@ const fetchStudentData = async () => {
           <Button href="/user" variant="contained" color="primary">
             Về trang chủ
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog chi tiết lớp */}
+      <Dialog open={detailDialogOpen} onClose={closeDetail} maxWidth='sm' fullWidth>
+        <DialogTitle>Chi tiết lớp học</DialogTitle>
+        <DialogContent dividers>
+          {detailClass && (
+            <Table size='small'>
+              <TableBody>
+                <TableRow><TableCell>Tên lớp</TableCell><TableCell>{detailClass.name}</TableCell></TableRow>
+                <TableRow><TableCell>Giáo viên giảng dạy</TableCell><TableCell>{detailTeachers.length ? detailTeachers.map(t=>t.full_name).filter(Boolean).join(', ') : 'Chưa cập nhật'}</TableCell></TableRow>
+                <TableRow><TableCell>Lịch học</TableCell><TableCell>
+                  {(() => {
+                    const lines = getScheduleLines(detailClass.id);
+                    return lines.length ? lines.map((l,i)=>(<div key={i}>{l}</div>)) : 'Chưa cập nhật';
+                  })()}
+                </TableCell></TableRow>
+                <TableRow><TableCell>Học phí</TableCell><TableCell>{detailClass.fee?.toLocaleString('vi-VN')} VNĐ</TableCell></TableRow>
+                {detailClass.description && <TableRow><TableCell>Mô tả</TableCell><TableCell>{detailClass.description}</TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDetail}>Đóng</Button>
+          {detailClass && tabValue===1 && !isAlreadyEnrolled(detailClass.id) && (
+            <Button variant='contained' onClick={()=>{ closeDetail(); handleOpenConfirmDialog(detailClass); }}>Đăng ký</Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

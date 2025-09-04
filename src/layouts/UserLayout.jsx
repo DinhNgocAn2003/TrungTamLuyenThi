@@ -100,7 +100,7 @@ const getMenuItems = (role) => {
     return [
       ...baseItems,
       { 
-        title: 'Lớp học của tôi', 
+        title: 'Lớp học', 
         path: '/teacher/classes', 
         icon: <ClassIcon />, 
         color: '#2196f3',
@@ -112,13 +112,6 @@ const getMenuItems = (role) => {
         icon: <EventNoteIcon />, 
         color: '#ff9800',
         description: 'Điểm danh học sinh'
-      },
-      { 
-        title: 'Thanh toán', 
-        path: '/teacher/payments', 
-        icon: <PaymentIcon />, 
-        color: '#9c27b0',
-        description: 'Xem thông tin lương và thanh toán'
       }
     ];
   }
@@ -140,12 +133,20 @@ function UserLayout() {
   const [student, setStudent] = useState(null);
   const [loadingStudent, setLoadingStudent] = useState(false);
   
-  // Check if user has student or teacher role
+  // Enforce correct layout: only students should stay here
   useEffect(() => {
-    if (userProfile && userProfile.role === 'admin') {
-      console.log('❌ Access denied - admin should use admin layout');
+    if (!userProfile?.role) return; // wait until loaded
+    const role = userProfile.role;
+    if (role === 'admin') {
+      if (process.env.NODE_ENV !== 'production') console.log('[UserLayout] Redirect admin -> /admin/dashboard');
       showNotification('Bạn không có quyền truy cập trang này', 'error');
       navigate('/admin/dashboard', { replace: true });
+      return;
+    }
+    if (role === 'teacher') {
+      if (process.env.NODE_ENV !== 'production') console.log('[UserLayout] Redirect teacher -> /teacher/dashboard (wrong layout)');
+      navigate('/teacher/dashboard', { replace: true });
+      return;
     }
   }, [userProfile, navigate, showNotification]);
   

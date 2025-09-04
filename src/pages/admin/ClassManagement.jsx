@@ -108,6 +108,15 @@ function ClassManagement() {
     end_time: '',
     location: ''
   });
+  // Helper lấy tên môn từ subjects_grades + subjects
+  const getSubjectName = (classItem) => {
+    if (!classItem?.subjects_grades_id) return 'Không xác định';
+    console.log('check',classItem)
+    const sg = subjectGrades.find(s => s.id === classItem.subjects_grades_id);
+    if (!sg) return 'Không xác định';
+    const subj = subjects.find(sub => sub.id === sg.subject_id);
+    return subj?.name || sg.name || 'Không xác định';
+  };
 
   // Các tùy chọn ngày trong tuần
   const dayOptions = [
@@ -612,7 +621,7 @@ function ClassManagement() {
 
                       <Box sx={{ mt: 1, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, justifyContent: 'space-between' }}>
                         <Typography variant="body2">
-                          Môn/Lớp: {subjectGrades.find(sg => sg.id === classItem.subjects_grades_id)?.display_name || 'Không xác định'}
+                            Môn: {subjectGrades.find(sg => sg.id === classItem.subjects_grades_id)?.name || 'Không xác định'}
                         </Typography>
                       </Box>
 
@@ -702,9 +711,9 @@ function ClassManagement() {
               {tabValue === 0 && (
                 <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
-                    <Typography variant="subtitle1" gutterBottom>Môn / Lớp</Typography>
+                    <Typography variant="subtitle1" gutterBottom>Môn</Typography>
                     <Typography variant="body1" paragraph>
-                      {subjectGrades.find(sg => sg.id === selectedClass.subjects_grades_id)?.display_name || 'Không xác định'}
+                      {getSubjectName(selectedClass)}
                     </Typography>
                     
                     <Typography variant="subtitle1" gutterBottom>Học phí</Typography>
@@ -921,7 +930,7 @@ function ClassManagement() {
             <Grid item xs={12}>
               <Autocomplete
                 options={subjectGrades}
-                getOptionLabel={(option) => option.display_name || option.name || ''}
+                getOptionLabel={(option) => option.name || ''}
                 value={selectedSubjectGrade}
                 onChange={(e, newVal) => {
                   setSelectedSubjectGrade(newVal);

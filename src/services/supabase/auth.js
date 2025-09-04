@@ -1,10 +1,13 @@
 import { supabase } from './client';
 import { supabaseAdmin } from './adminClient';
 
-// Helper function to check if string is phone number
+// Phone validation used for transforming phone login into synthetic email in signInWithEmailOrPhone
+// Accepted patterns: +84 / 84 / 0 followed by carrier prefix (3|5|7|8|9) and 8 digits
 const isPhoneNumber = (input) => {
-  const phoneRegex = /^(\+84|84|0)([3|5|7|8|9])+([0-9]{8})$/;
-  return phoneRegex.test(input.replace(/\s/g, ''));
+  if (!input) return false;
+  const cleanedInput = input.replace(/\s|-/g, '');
+  const phoneRegex = /^(\+84|84|0)[0-9]{9}$/;
+  return phoneRegex.test(cleanedInput);
 };
 
 // Helper function to normalize phone number
@@ -28,21 +31,14 @@ const createEmailFromPhone = (phone) => {
 export const signInWithEmailOrPhone = async (identifier, password) => {
   try {
     let email = identifier;
-    
-    // If identifier looks like phone number, convert to email format
+    // Transform phone to synthetic email if detected
     if (isPhoneNumber(identifier)) {
       email = createEmailFromPhone(identifier);
-      console.log('📱 Phone login detected, using email:', email);
     }
-    
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     return { data, error };
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Auth sign-in error:', error.message || error);
     return { data: null, error };
   }
 };

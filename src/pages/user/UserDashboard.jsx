@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
   Box,
-  Paper,
   Typography,
   Grid,
   Card,
@@ -9,35 +8,20 @@ import {
   CardHeader,
   CardActions,
   Button,
-  Divider,
   Chip,
-  Avatar,
   List,
   ListItem,
   ListItemText,
-  ListItemAvatar,
   ListItemSecondaryAction,
-  IconButton,
-  Alert,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow
+  Alert
 } from '@mui/material';
+import { CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material';
 import {
-  School as SchoolIcon,
-  Class as ClassIcon,
-  EventNote as EventNoteIcon,
-  Assignment as AssignmentIcon,
-  Today as TodayIcon,
-  Payment as PaymentIcon,
-  QrCode as QrCodeIcon,
-  ArrowForward as ArrowForwardIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon
-} from '@mui/icons-material';
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
+} from '@mui/material';
 import dayjs from 'dayjs';
 import QRCode from 'qrcode.react';
 
@@ -51,6 +35,8 @@ import {
   getPayments,
   getClasses
 } from '../../services/supabase/database';
+// Bổ sung lấy lịch học & giáo viên giống dialog ở trang đăng ký
+import { getClassTeachers, getSchedulesForClasses } from '../../services/supabase/classes';
 
 function UserDashboard() {
   const { user } = useAuth();
@@ -64,6 +50,10 @@ function UserDashboard() {
   const [payments, setPayments] = useState([]);
   const [showQRCode, setShowQRCode] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState([]);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [detailTeachers, setDetailTeachers] = useState([]);
+  const [schedulesMap, setSchedulesMap] = useState({}); // { classId: [schedules] }
   
   useEffect(() => {
     fetchStudentData();
@@ -144,6 +134,33 @@ const fetchStudentData = async () => {
     setEnrollments(enrollmentData);
     setActiveClasses(activeClassesData);
 
+    // Tải lịch học cho các lớp đang active (tương tự ClassRegistration)
+    const classIds = activeClassesData.map(c => c.id).filter(Boolean);
+    if (classIds.length) {
+      try {
+        const { data: schedules, error: schedErr } = await getSchedulesForClasses(classIds);
+        if (!schedErr && Array.isArray(schedules)) {
+          const map = {};
+            schedules.forEach(s => {
+              if (!map[s.class_id]) map[s.class_id] = [];
+              map[s.class_id].push(s);
+            });
+            Object.keys(map).forEach(k => {
+              map[k].sort((a,b)=>{
+                const da = parseInt(a.day_of_week,10); const db = parseInt(b.day_of_week,10);
+                if (da !== db) return (da===0?7:da) - (db===0?7:db); // CN xuống cuối
+                return (a.start_time||'').localeCompare(b.start_time||'');
+              });
+            });
+          setSchedulesMap(map);
+        }
+      } catch (e) {
+        console.warn('Không tải được lịch học:', e);
+      }
+    } else {
+      setSchedulesMap({});
+    }
+
     // 5. Xử lý attendance - thêm kiểm tra định dạng ngày
     const today = dayjs().format('DD-MM-YYYY');
     const sevenDaysAgo = dayjs().subtract(7, 'day').format('DD-MM-YYYY');
@@ -193,148 +210,84 @@ const fetchStudentData = async () => {
     setShowQRCode(!showQRCode);
   };
 
+  const handleOpenClassDetail = async (cls) => {
+    setSelectedClass(cls);
+    // Lấy giáo viên
+    try {
+      const { data: teachers } = await getClassTeachers(cls.id);
+      setDetailTeachers(teachers || []);
+    } catch (_) {
+      setDetailTeachers([]);
+    }
+    setDetailDialogOpen(true);
+  };
+
+  const handleCloseClassDetail = () => {
+    setDetailDialogOpen(false);
+    setSelectedClass(null);
+    setDetailTeachers([]);
+  };
+
+  // Helper xây từng dòng lịch học giống bên ClassRegistration
+  const dayNames = { '1':'Thứ 2','2':'Thứ 3','3':'Thứ 4','4':'Thứ 5','5':'Thứ 6','6':'Thứ 7','0':'CN' };
+  const getScheduleLines = (classId) => {
+    const list = schedulesMap[classId] || [];
+    if (!list.length) return [];
+    return list.map(s => {
+      const dn = dayNames[String(s.day_of_week)] || s.day_of_week;
+      const time = `${(s.start_time||'').slice(0,5)}-${(s.end_time||'').slice(0,5)}`;
+      const room = s.location ? ` (${s.location})` : '';
+      return `${dn} ${time}${room}`;
+    });
+  };
+
   return (
-    <Box sx={{ 
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #a8b8e6 0%, #c8a2c8 100%)',
-      p: 1
-    }}>
-      {/* Header với gradient */}
-      <Box sx={{ 
-        background: 'linear-gradient(135deg, #81c784 0%, #aed581 100%)',
-        borderRadius: 3,
-        p: 4,
-        mb: 4,
-        color: 'white',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        <Box sx={{ 
-          position: 'absolute',
-          top: -50,
-          right: -50,
-          width: 100,
-          height: 100,
-          borderRadius: '50%',
-          bgcolor: 'rgba(255,255,255,0.1)',
-        }} />
-        <Box sx={{ 
-          position: 'absolute',
-          bottom: -30,
-          left: -30,
-          width: 80,
-          height: 80,
-          borderRadius: '50%',
-          bgcolor: 'rgba(255,255,255,0.1)',
-        }} />
-        
-        <Grid container spacing={3} alignItems="center">
-          <Grid item xs={12} md={8}>
-            <Typography variant="h3" fontWeight="bold" gutterBottom sx={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-              👋 Xin chào, {student?.full_name || user?.user_metadata?.full_name || 'Học sinh'}!
-            </Typography>
-            <Box sx={{ opacity: 0.9, mb: 2, fontSize: '1.1rem', fontWeight: 'medium' }}>
-              🎓 Mã học sinh: <Chip label={student?.id || 'N/A'} size="small" sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 'bold' }} />
-            </Box>
-            <Box sx={{ opacity: 0.8, fontSize: '1rem' }}>
-              Chào mừng bạn đến với bảng điều khiển học tập! Hãy cùng theo dõi tiến trình học tập của bạn.
-            </Box>
-          </Grid>
-          <Grid item xs={12} md={4} textAlign="center">
-            <Avatar
-              src={student?.avatar_url || user?.user_metadata?.avatar_url}
-              sx={{ 
-                width: 120, 
-                height: 120, 
-                mx: 'auto',
-                border: '4px solid rgba(255,255,255,0.3)',
-                boxShadow: '0 8px 16px rgba(0,0,0,0.2)'
-              }}
-            >
-              {student?.full_name?.charAt(0) || user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0)}
-            </Avatar>
-          </Grid>
-        </Grid>
+    <Box sx={{ minHeight:'100vh', backgroundColor:'background.default', p:2 }}>
+      {/* Header đơn giản */}
+      <Box sx={{ backgroundColor:'primary.main', color:'#fff', borderRadius:2, p:3, mb:3 }}>
+        <Typography variant="h5" fontWeight={600} gutterBottom>
+          Xin chào, {student?.full_name || user?.user_metadata?.full_name || 'Học sinh'}
+        </Typography>
+        <Box sx={{ display:'flex', alignItems:'center', gap:1, flexWrap:'wrap', fontSize:'0.85rem' }}>
+          <Box>Mã học sinh:</Box>
+          <Chip label={student?.id || 'N/A'} size="small" sx={{ bgcolor:'rgba(255,255,255,0.2)', color:'#fff' }} />
+          <Box sx={{ opacity:0.9 }}>Theo dõi tiến trình học tập của bạn tại đây.</Box>
+        </Box>
       </Box>
 
-      {/* Stats Cards với gradient */}
-      <Grid container spacing={3} mb={4}>
+      <Grid container spacing={2} mb={3}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #90caf9 0%, #64b5f6 100%)',
-            color: 'white',
-            borderRadius: 3,
-            transition: 'transform 0.3s',
-            '&:hover': { transform: 'translateY(-3px)' }
-          }}>
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <SchoolIcon sx={{ fontSize: 48, mb: 2, opacity: 0.9 }} />
-              <Typography variant="h4" fontWeight="bold" gutterBottom>
-                {activeClasses.length}
-              </Typography>
-              <Box sx={{ opacity: 0.9, fontSize: '1rem', fontWeight: 'medium' }}>
-                📚 Lớp đang học
-              </Box>
+          <Card sx={{ backgroundColor:'#fff', border:'1px solid #e5e7eb' }}>
+            <CardContent sx={{ textAlign:'center', p:2 }}>
+              <Typography variant="h5" fontWeight={600}>{activeClasses.length}</Typography>
+              <Typography variant="body2">Lớp đang học</Typography>
             </CardContent>
           </Card>
         </Grid>
         
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #f48fb1 0%, #e91e63 100%)',
-            color: 'white',
-            borderRadius: 3,
-            transition: 'transform 0.3s',
-            '&:hover': { transform: 'translateY(-3px)' }
-          }}>
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <EventNoteIcon sx={{ fontSize: 48, mb: 2, opacity: 0.9 }} />
-              <Typography variant="h4" fontWeight="bold" gutterBottom>
-                {recentAttendance.filter(a => a.status === 'present').length}
-              </Typography>
-              <Box sx={{ opacity: 0.9, fontSize: '1rem', fontWeight: 'medium' }}>
-                ✅ Buổi đã tham dự
-              </Box>
+          <Card sx={{ backgroundColor:'#fff', border:'1px solid #e5e7eb' }}>
+            <CardContent sx={{ textAlign:'center', p:2 }}>
+              <Typography variant="h5" fontWeight={600}>{recentAttendance.filter(a => a.status === 'present').length}</Typography>
+              <Typography variant="body2">Buổi đã tham dự</Typography>
             </CardContent>
           </Card>
         </Grid>
         
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #81c784 0%, #66bb6a 100%)',
-            color: 'white',
-            borderRadius: 3,
-            transition: 'transform 0.3s',
-            '&:hover': { transform: 'translateY(-3px)' }
-          }}>
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <PaymentIcon sx={{ fontSize: 48, mb: 2, opacity: 0.9 }} />
-              <Typography variant="h4" fontWeight="bold" gutterBottom>
-                {payments.filter(p => p.status === 'completed').length}
-              </Typography>
-              <Box sx={{ opacity: 0.9, fontSize: '1rem', fontWeight: 'medium' }}>
-                💰 Đã thanh toán
-              </Box>
+          <Card sx={{ backgroundColor:'#fff', border:'1px solid #e5e7eb' }}>
+            <CardContent sx={{ textAlign:'center', p:2 }}>
+              <Typography variant="h5" fontWeight={600}>{payments.filter(p => p.status === 'completed').length}</Typography>
+              <Typography variant="body2">Đã thanh toán</Typography>
             </CardContent>
           </Card>
         </Grid>
         
         <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ 
-            background: 'linear-gradient(135deg, #ffb74d 0%, #ff9800 100%)',
-            color: 'white',
-            borderRadius: 3,
-            transition: 'transform 0.3s',
-            '&:hover': { transform: 'translateY(-3px)' }
-          }}>
-            <CardContent sx={{ textAlign: 'center', p: 3 }}>
-              <TodayIcon sx={{ fontSize: 48, mb: 2, opacity: 0.9 }} />
-              <Typography variant="h4" fontWeight="bold" gutterBottom>
-                {todayAttendance.length}
-              </Typography>
-              <Box sx={{ opacity: 0.9, fontSize: '1rem', fontWeight: 'medium' }}>
-                📅 Lớp hôm nay
-              </Box>
+          <Card sx={{ backgroundColor:'#fff', border:'1px solid #e5e7eb' }}>
+            <CardContent sx={{ textAlign:'center', p:2 }}>
+              <Typography variant="h5" fontWeight={600}>{todayAttendance.length}</Typography>
+              <Typography variant="body2">Lớp hôm nay</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -344,21 +297,13 @@ const fetchStudentData = async () => {
       <Grid container spacing={3} mb={4}>
         {/* Thông tin cá nhân */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
-          }}>
+          <Card sx={{ borderRadius:2 }}>
             <CardHeader 
               title={
                 <Box display="flex" alignItems="center" gap={1}>
-                  <Avatar sx={{ bgcolor: 'primary.main' }}>
-                    <SchoolIcon />
-                  </Avatar>
+                  <Typography variant="h6" fontWeight="600">Thông tin cá nhân</Typography>
                   <Typography variant="h6" fontWeight="bold">
-                    👤 Thông tin cá nhân
+                    
                   </Typography>
                 </Box>
               }
@@ -370,11 +315,6 @@ const fetchStudentData = async () => {
                   {student ? (
                     <List dense>
                       <ListItem sx={{ px: 0 }}>
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: 'success.light' }}>
-                            <SchoolIcon />
-                          </Avatar>
-                        </ListItemAvatar>
                         <ListItemText
                           disableTypography
                           primary={<Box sx={{ fontWeight: 'medium' }}>👨‍🎓 Họ và tên</Box>}
@@ -383,11 +323,6 @@ const fetchStudentData = async () => {
                       </ListItem>
                       
                       <ListItem sx={{ px: 0 }}>
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: 'info.light' }}>
-                            <EventNoteIcon />
-                          </Avatar>
-                        </ListItemAvatar>
                         <ListItemText
                           disableTypography
                           primary={<Box sx={{ fontWeight: 'medium' }}>🎂 Ngày sinh</Box>}
@@ -396,11 +331,6 @@ const fetchStudentData = async () => {
                       </ListItem>
                       
                       <ListItem sx={{ px: 0 }}>
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: 'warning.light' }}>
-                            <SchoolIcon />
-                          </Avatar>
-                        </ListItemAvatar>
                         <ListItemText
                           disableTypography
                           primary={<Box sx={{ fontWeight: 'medium' }}>🏫 Trường</Box>}
@@ -409,11 +339,6 @@ const fetchStudentData = async () => {
                       </ListItem>
                       
                       <ListItem sx={{ px: 0 }}>
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: 'error.light' }}>
-                            <ClassIcon />
-                          </Avatar>
-                        </ListItemAvatar>
                         <ListItemText
                           disableTypography
                           primary={<Box sx={{ fontWeight: 'medium' }}>📚 Lớp</Box>}
@@ -430,18 +355,13 @@ const fetchStudentData = async () => {
                 
                 <Box sx={{ ml: 2 }}>
                   <Button 
-                    variant={showQRCode ? "outlined" : "contained"}
-                    startIcon={<QrCodeIcon />}
+                    variant={showQRCode ? 'outlined':'contained'}
                     onClick={handleToggleQRCode}
                     sx={{ 
-                      borderRadius: 2,
-                      background: showQRCode ? 'transparent' : 'linear-gradient(135deg, #5c9bd5 0%, #70a288 100%)',
-                      '&:hover': {
-                        background: showQRCode ? 'rgba(92,155,213,0.1)' : 'linear-gradient(135deg, #4a90d9 0%, #5d8a73 100%)'
-                      }
+                      borderRadius:2
                     }}
                   >
-                    {showQRCode ? "🙈 Ẩn mã QR" : "📱 Hiện mã QR"}
+                    {showQRCode ? 'Ẩn mã QR':'Hiện mã QR'}
                   </Button>
                   
                   {showQRCode && student?.user_id && (
@@ -472,23 +392,11 @@ const fetchStudentData = async () => {
         
         {/* Các lớp học đang tham gia */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-            height: '100%'
-          }}>
+          <Card sx={{ borderRadius:2, height:'100%' }}>
             <CardHeader 
               title={
                 <Box display="flex" alignItems="center" gap={1}>
-                  <Avatar sx={{ bgcolor: 'secondary.main' }}>
-                    <ClassIcon />
-                  </Avatar>
-                  <Typography variant="h6" fontWeight="bold">
-                    📚 Lớp học đang tham gia ({activeClasses.length})
-                  </Typography>
+                  <Typography variant="h6" fontWeight={600}>Lớp học đang tham gia ({activeClasses.length})</Typography>
                 </Box>
               }
               sx={{ pb: 1 }}
@@ -514,29 +422,17 @@ const fetchStudentData = async () => {
                         }
                       }}
                     >
-                      <ListItemAvatar>
-                        <Avatar sx={{ 
-                          bgcolor: index % 2 === 0 ? 'primary.main' : 'secondary.main',
-                          width: 48,
-                          height: 48
-                        }}>
-                          <ClassIcon />
-                        </Avatar>
-                      </ListItemAvatar>
                       <ListItemText
                         disableTypography
                         primary={
                           <Box sx={{ fontWeight: 'bold', color: 'primary.main', fontSize: '1rem' }}>
-                            🎓 {classItem.name}
+                            {classItem.name}
                           </Box>
                         }
                         secondary={
                           <Box>
-                            <Box sx={{ color: 'text.secondary', mb: 0.5, fontSize: '0.875rem' }}>
-                              📖 Môn: {classItem.subject_id ? classItem.subject?.name || 'N/A' : 'N/A'}
-                            </Box>
                             <Chip 
-                              label={`📅 ${classItem.schedule || 'Xem chi tiết'}`} 
+                              label={`${classItem.schedule || 'Xem chi tiết'}`} 
                               size="small" 
                               sx={{ 
                                 bgcolor: index % 2 === 0 ? 'primary.light' : 'secondary.light',
@@ -551,19 +447,13 @@ const fetchStudentData = async () => {
                       <ListItemSecondaryAction>
                         <Button 
                           size="small" 
-                          variant="contained"
-                          endIcon={<ArrowForwardIcon />}
-                          href={`/user/classes/${classItem.id}`}
+                          variant="outlined"
+                          onClick={() => handleOpenClassDetail(classItem)}
                           sx={{
-                            bgcolor: index % 2 === 0 ? 'primary.main' : 'secondary.main',
-                            '&:hover': {
-                              bgcolor: index % 2 === 0 ? 'primary.dark' : 'secondary.dark',
-                              transform: 'scale(1.05)'
-                            },
-                            borderRadius: 2
+                            borderRadius:2
                           }}
                         >
-                          📋 Chi tiết
+                          Chi tiết
                         </Button>
                       </ListItemSecondaryAction>
                     </ListItem>
@@ -592,21 +482,8 @@ const fetchStudentData = async () => {
             
             {activeClasses.length > 0 && (
               <CardActions sx={{ justifyContent: 'center', p: 2 }}>
-                <Button 
-                  variant="contained" 
-                  color="primary"
-                  href="/user/classes"
-                  startIcon={<ArrowForwardIcon />}
-                  sx={{ 
-                    borderRadius: 2,
-                    background: 'linear-gradient(135deg, #5c9bd5 0%, #70a288 100%)',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #4a90d9 0%, #5d8a73 100%)',
-                      transform: 'translateY(-1px)'
-                    }
-                  }}
-                >
-                  🔍 Xem tất cả lớp học
+                <Button variant="outlined" href="/student/classes" sx={{ borderRadius:2 }}>
+                  Xem lớp học
                 </Button>
               </CardActions>
             )}
@@ -618,22 +495,11 @@ const fetchStudentData = async () => {
       <Grid container spacing={3}>
         {/* Điểm danh hôm nay */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
-          }}>
+          <Card sx={{ borderRadius:2 }}>
             <CardHeader 
               title={
                 <Box display="flex" alignItems="center" gap={1}>
-                  <Avatar sx={{ bgcolor: 'warning.main' }}>
-                    <TodayIcon />
-                  </Avatar>
-                  <Typography variant="h6" fontWeight="bold">
-                    📅 Điểm danh hôm nay
-                  </Typography>
+                  <Typography variant="h6" fontWeight={600}>Điểm danh hôm nay</Typography>
                 </Box>
               }
               subheader={
@@ -675,10 +541,9 @@ const fetchStudentData = async () => {
                           </Typography>
                         </Box>
                         <Chip 
-                          icon={record.status === 'present' ? <CheckCircleIcon /> : <CancelIcon />} 
-                          label={record.status === 'present' ? '✅ Có mặt' : '❌ Vắng mặt'} 
+                          label={record.status === 'present' ? 'Có mặt' : 'Vắng'} 
                           color={record.status === 'present' ? 'success' : 'error'} 
-                          variant="filled"
+                          size="small"
                           sx={{ fontWeight: 'bold' }}
                         />
                       </Box>
@@ -698,22 +563,11 @@ const fetchStudentData = async () => {
         
         {/* Lịch sử thanh toán gần đây */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
-          }}>
+          <Card sx={{ borderRadius:2 }}>
             <CardHeader 
               title={
                 <Box display="flex" alignItems="center" gap={1}>
-                  <Avatar sx={{ bgcolor: 'success.main' }}>
-                    <PaymentIcon />
-                  </Avatar>
-                  <Typography  component="div" fontWeight="bold">
-                    💰 Lịch sử thanh toán
-                  </Typography>
+                  <Typography component="div" fontWeight={600}>Lịch sử thanh toán</Typography>
                 </Box>
               }
               subheader={
@@ -784,27 +638,64 @@ const fetchStudentData = async () => {
               )}
             </CardContent>
             
-            <CardActions sx={{ justifyContent: 'center', p: 2 }}>
-              <Button 
-                variant="contained"
-                color="success" 
-                href="/user/payments"
-                startIcon={<PaymentIcon />}
-                sx={{ 
-                  borderRadius: 2,
-                  background: 'linear-gradient(135deg, #81c784 0%, #66bb6a 100%)', // Softer green
-                  '&:hover': {
-                    background: 'linear-gradient(135deg, #66bb6a 0%, #4caf50 100%)',
-                    transform: 'translateY(-1px)' // Less movement
-                  }
-                }}
-              >
-                📊 Xem lịch sử thanh toán
-              </Button>
+            <CardActions sx={{ justifyContent:'center', p:2 }}>
+              <Button variant="outlined" href="/user/payments" sx={{ borderRadius:2 }}>Xem lịch sử thanh toán</Button>
             </CardActions>
           </Card>
         </Grid>
       </Grid>
+      {/* Class Detail Dialog (đầy đủ) */}
+      <Dialog open={detailDialogOpen} onClose={handleCloseClassDetail} maxWidth="sm" fullWidth>
+        <DialogTitle>Chi tiết lớp học</DialogTitle>
+        <DialogContent dividers>
+          {selectedClass && (
+            <Box component="table" sx={{ width:'100%', borderCollapse:'separate', borderSpacing: '0 6px' }}>
+              <tbody>
+                <tr>
+                  <td style={{verticalAlign:'top', width:140, fontWeight:600}}>Tên lớp</td>
+                  <td>{selectedClass.name}</td>
+                </tr>
+                <tr>
+                  <td style={{verticalAlign:'top', fontWeight:600}}>Môn học</td>
+                  <td>{selectedClass.subject?.name || 'Không xác định'}</td>
+                </tr>
+                <tr>
+                  <td style={{verticalAlign:'top', fontWeight:600}}>Giáo viên</td>
+                  <td>{detailTeachers.length ? detailTeachers.map(t=>t.full_name).filter(Boolean).join(', ') : 'Chưa cập nhật'}</td>
+                </tr>
+                <tr>
+                  <td style={{verticalAlign:'top', fontWeight:600}}>Lịch học</td>
+                  <td>{(() => { const lines = getScheduleLines(selectedClass.id); return lines.length ? lines.map((l,i)=>(<div key={i}>{l}</div>)) : 'Chưa cập nhật'; })()}</td>
+                </tr>
+                {selectedClass.fee != null && (
+                  <tr>
+                    <td style={{verticalAlign:'top', fontWeight:600}}>Học phí</td>
+                    <td>{Number(selectedClass.fee).toLocaleString('vi-VN')} VNĐ</td>
+                  </tr>
+                )}
+                <tr>
+                  <td style={{verticalAlign:'top', fontWeight:600}}>Trạng thái</td>
+                  <td>
+                    <Chip 
+                      label={selectedClass.is_active ? 'Đang hoạt động' : 'Đã kết thúc'}
+                      color={selectedClass.is_active ? 'success' : 'default'}
+                      size="small"/>
+                  </td>
+                </tr>
+                {selectedClass.description && (
+                  <tr>
+                    <td style={{verticalAlign:'top', fontWeight:600}}>Mô tả</td>
+                    <td style={{whiteSpace:'pre-line'}}>{selectedClass.description}</td>
+                  </tr>
+                )}
+              </tbody>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseClassDetail}>Đóng</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

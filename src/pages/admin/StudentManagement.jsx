@@ -38,7 +38,8 @@ function StudentManagement() {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [formData, setFormData] = useState({
-    id: null,
+    id: null,          // internal students table id (not used for update)
+    user_id: null,     // authoritative key for update/delete
     full_name: '',
     date_of_birth: null,
     gender: '',
@@ -101,6 +102,7 @@ function StudentManagement() {
     setSelectedStudent(student);
     setFormData({
       id: student.id,
+      user_id: student.user_id,
       full_name: student.full_name || '',
       date_of_birth: student.date_of_birth || null,
       gender: student.gender || '',
@@ -121,6 +123,7 @@ function StudentManagement() {
     setSelectedStudent(null);
     setFormData({
       id: null,
+      user_id: null,
       full_name: '',
       date_of_birth: null,
       gender: '',
@@ -154,8 +157,8 @@ function StudentManagement() {
     }
     setLoading(true);
     try {
-      if (isEditMode && formData.id) {
-        const { error } = await updateStudent(formData.id, formData);
+      if (isEditMode && formData.user_id) {
+        const { error } = await updateStudent(formData.user_id, formData);
         if (error) throw error;
         showNotification('Cập nhật học sinh thành công', 'success');
       } else {
@@ -173,10 +176,10 @@ function StudentManagement() {
   };
 
   const handleDelete = async () => {
-    if (!formData.id) return;
+    if (!formData.user_id) return;
     setLoading(true);
     try {
-      const { error } = await deleteStudent(formData.id);
+      const { error } = await deleteStudent(formData.user_id);
       if (error) throw error;
       showNotification('Xóa học sinh thành công', 'success');
       handleCloseDialog();
